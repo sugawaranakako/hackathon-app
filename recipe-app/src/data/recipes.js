@@ -4,6 +4,7 @@ export const recipesData = [
     name: "親子丼",
     image: "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400",
     description: "鶏肉と卵でとろとろに仕上げた日本の代表的な丼料理",
+    servings: 2,
     ingredients: [
       "鶏もも肉 200g",
       "玉ねぎ 1/2個",
@@ -17,8 +18,8 @@ export const recipesData = [
     instructions: [
       "鶏肉を一口大に切り、玉ねぎは薄切りにする",
       "フライパンにだし汁、しょうゆ、みりん、砂糖を入れて煮立てる",
-      "鶏肉と玉ねぎを加えて煮る",
-      "溶いた卵を回し入れ、半熟状になったら火を止める",
+      "鶏肉と玉ねぎを加えて5分煮る",
+      "溶いた卵を回し入れ、半熟状になったら火を止める（約1分）",
       "ご飯の上にのせて完成"
     ],
     cookingTime: "15分",
@@ -29,6 +30,7 @@ export const recipesData = [
     name: "きのこパスタ",
     image: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400",
     description: "きのこの旨味がたっぷりの絶品パスタ",
+    servings: 2,
     ingredients: [
       "スパゲッティ 200g",
       "しめじ 100g",
@@ -43,8 +45,9 @@ export const recipesData = [
     instructions: [
       "きのこ類は食べやすい大きさに切る",
       "にんにくはスライスにする",
-      "パスタを茹で始める",
-      "フライパンでにんにくときのこを炒める",
+      "パスタを茹で始める（パッケージの表示時間通り、約10分）",
+      "フライパンでにんにくときのこを3分炒める",
+      "白ワインを加えて2分煮詰める",
       "茹で上がったパスタと絡めて完成"
     ],
     cookingTime: "20分",
@@ -53,8 +56,9 @@ export const recipesData = [
   {
     id: 3,
     name: "麻婆豆腐",
-    image: "https://images.unsplash.com/photo-1583349443295-e0e9d9982c3d?w=400",
+    image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400",
     description: "四川風の本格的な辛口麻婆豆腐",
+    servings: 2,
     ingredients: [
       "絹ごし豆腐 1丁",
       "豚ひき肉 100g",
@@ -67,11 +71,12 @@ export const recipesData = [
       "片栗粉 大さじ1"
     ],
     instructions: [
-      "豆腐は2cm角に切り、下茹でする",
+      "豆腐は2cm角に切り、下茹でする（2分）",
       "ねぎ、にんにく、しょうがをみじん切りにする",
-      "フライパンでひき肉を炒める",
+      "フライパンでひき肉を3分炒める",
       "調味料とスープを加えて煮立てる",
-      "豆腐を加えて水溶き片栗粉でとろみをつける"
+      "豆腐を加えて5分煮込む",
+      "水溶き片栗粉でとろみをつける"
     ],
     cookingTime: "25分",
     difficulty: "普通"
@@ -79,8 +84,9 @@ export const recipesData = [
   {
     id: 4,
     name: "肉じゃが",
-    image: "https://images.unsplash.com/photo-1609501676063-e7d77b6b2e17?w=400",
+    image: "https://images.unsplash.com/photo-1574484284002-952d92456975?w=400",
     description: "日本の家庭料理の定番、ホクホクのじゃがいもと牛肉の煮物",
+    servings: 3,
     ingredients: [
       "牛肉薄切り 150g",
       "じゃがいも 3個",
@@ -95,9 +101,9 @@ export const recipesData = [
     ],
     instructions: [
       "じゃがいもとにんじんは乱切り、玉ねぎはくし切りにする",
-      "鍋に油を熱し、牛肉を炒める",
-      "野菜を加えてさらに炒める",
-      "だし汁と調味料を加えて煮込む",
+      "鍋に油を熱し、牛肉を2分炒める",
+      "野菜を加えてさらに3分炒める",
+      "だし汁と調味料を加えて15分煮込む",
       "じゃがいもが柔らかくなったら完成"
     ],
     cookingTime: "30分",
@@ -108,6 +114,7 @@ export const recipesData = [
     name: "チキンカレー",
     image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400",
     description: "スパイシーで本格的なチキンカレー",
+    servings: 4,
     ingredients: [
       "鶏もも肉 400g",
       "玉ねぎ 2個",
@@ -122,9 +129,9 @@ export const recipesData = [
     instructions: [
       "鶏肉と野菜を一口大に切る",
       "にんにく、しょうがをみじん切りにする",
-      "鍋で鶏肉を炒めて取り出す",
-      "野菜を炒めて水を加えて煮込む",
-      "カレールーを加えて煮込んで完成"
+      "鍋で鶏肉を5分炒めて取り出す",
+      "野菜を炒めて水を加えて20分煮込む",
+      "カレールーを加えて10分煮込んで完成"
     ],
     cookingTime: "45分",
     difficulty: "簡単"
