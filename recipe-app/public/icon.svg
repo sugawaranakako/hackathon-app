@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="512" height="512" fill="#FF6B35" rx="80"/>
+  
+  <!-- フライパンの柄 -->
+  <rect x="420" y="240" width="60" height="32" fill="#8B4513" rx="16"/>
+  
+  <!-- フライパン本体 -->
+  <ellipse cx="280" cy="256" rx="140" ry="120" fill="#2C2C2C"/>
+  <ellipse cx="280" cy="256" rx="120" ry="100" fill="#404040"/>
+  
+  <!-- 料理（目玉焼き） -->
+  <ellipse cx="280" cy="256" rx="60" ry="45" fill="#FFFEF7"/>
+  <circle cx="280" cy="256" r="20" fill="#FFD700"/>
+  
+  <!-- ハイライト -->
+  <ellipse cx="240" cy="220" rx="15" ry="10" fill="#FFFFFF" opacity="0.3"/>
+  <ellipse cx="320" cy="200" rx="10" ry="8" fill="#FFFFFF" opacity="0.2"/>
+</svg>

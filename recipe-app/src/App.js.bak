@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import { recipesData } from './data/recipes';
-import LazyImage from './components/LazyImage';
 
 function App() {
   const [openRecipes, setOpenRecipes] = useState([]);
@@ -23,9 +22,6 @@ function App() {
   const [worldRecipesError, setWorldRecipesError] = useState(null);
   const [hasLoadedInitialRecipes, setHasLoadedInitialRecipes] = useState(false);
   const [displayedWorldRecipesCount, setDisplayedWorldRecipesCount] = useState(8);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [cookingMode, setCookingMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -45,103 +41,14 @@ function App() {
     localStorage.setItem('checkedIngredients', JSON.stringify(checkedIngredients));
   }, [checkedIngredients]);
 
-  // PWAインストール促進機能
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
-      // ブラウザのデフォルトのインストールプロンプトを阻止
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallPrompt(true);
-      console.log('PWA install prompt available');
-    };
-
-    const handleAppInstalled = () => {
-      setShowInstallPrompt(false);
-      setDeferredPrompt(null);
-      setNotification('アプリがホーム画面に追加されました！');
-      setTimeout(() => setNotification(null), 3000);
-    };
-
-    // 実際のbeforeinstallpromptイベントをリッスン
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  const handleInstallApp = async () => {
-    if (!deferredPrompt) {
-      console.log('No deferred prompt available');
-      
-      // 開発環境またはPWA条件未満の場合の案内
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const isHttps = window.location.protocol === 'https:';
-      
-      if (isLocalhost && !isHttps) {
-        setNotification('開発環境です。本番環境(HTTPS)でお試しください。');
-      } else if (!isHttps) {
-        setNotification('PWAインストールにはHTTPS接続が必要です。');
-      } else {
-        setNotification('ブラウザメニューから「ホーム画面に追加」をお試しください。');
-      }
-      
-      // 手動インストールガイドを表示
-      setShowInstallGuide(true);
-      setTimeout(() => {
-        setNotification(null);
-        setShowInstallGuide(false);
-      }, 8000);
-      return;
-    }
-
-    try {
-      // promptメソッドが存在するかチェック
-      if (typeof deferredPrompt.prompt !== 'function') {
-        console.log('Prompt method not available');
-        setNotification('現在インストールできません。後でもう一度お試しください。');
-        setTimeout(() => setNotification(null), 3000);
-        return;
-      }
-
-      // インストールプロンプトを表示
-      await deferredPrompt.prompt();
-      
-      // ユーザーの選択を待つ
-      const { outcome } = await deferredPrompt.userChoice;
-      
-      if (outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-        setNotification('アプリをインストール中...');
-      } else {
-        console.log('User dismissed the install prompt');
-        setNotification('インストールがキャンセルされました');
-      }
-      
-      setTimeout(() => setNotification(null), 3000);
-    } catch (error) {
-      console.error('Error during install:', error);
-      setNotification('インストール中にエラーが発生しました');
-      setTimeout(() => setNotification(null), 3000);
-    } finally {
-      setDeferredPrompt(null);
-      setShowInstallPrompt(false);
-    }
-  };
-
   useEffect(() => {
     localStorage.setItem('recipeMemos', JSON.stringify(memos));
   }, [memos]);
   
-  // 初回マウント時に世界のレシピを遅延取得（初期表示高速化のため）
+  // 初回マウント時に世界のレシピを取得
   useEffect(() => {
     const loadInitialWorldRecipes = async () => {
       if (hasLoadedInitialRecipes) return;
-      
-      // 2秒後に世界のレシピを取得（初期表示を高速化）
-      await new Promise(resolve => setTimeout(resolve, 2000));
       
       setIsLoadingWorldRecipes(true);
       setWorldRecipesError(null);
@@ -173,21 +80,16 @@ function App() {
                 .map((step, i) => `${i + 1}. ${step.trim()}`)
             );
             
-            // コツと副菜を自動生成
-            const { tips, sideDishes } = generateTipsAndSideDishes(meal.strMeal, meal.strArea);
-            
             return {
               id: `world-${meal.idMeal}`,
               name: translateMealName(meal.strMeal),
-              description: `${translationSystem.translate(meal.strArea)}料理 - ${translationSystem.translate(meal.strCategory)}`,
+              description: `${translateArea(meal.strArea)}料理 - ${translateCategory(meal.strCategory)}`,
               image: meal.strMealThumb,
               cookingTime: '30分',
               difficulty: '普通',
               servings: 2,
               ingredients: ingredients,
               instructions: instructions,
-              tips: tips,
-              sideDishes: sideDishes,
               isWorldRecipe: true
             };
           });
@@ -224,63 +126,7 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isLoadingWorldRecipes, displayedWorldRecipesCount, worldRecipes.length]);
   
-  // 世界のレシピに基本的なコツと副菜を自動追加する関数
-  const generateTipsAndSideDishes = (mealName, area) => {
-    const name = mealName.toLowerCase();
-    const region = area?.toLowerCase() || '';
-    
-    // 料理タイプ別のコツ
-    let tips = [];
-    if (name.includes('pasta') || name.includes('spaghetti')) {
-      tips = [
-        "パスタの茹で汁を少し残しておくと、ソースがよく絡みます",
-        "アルデンテに茹でるのがポイントです",
-        "最後にオリーブオイルを加えて風味をプラス"
-      ];
-    } else if (name.includes('curry') || name.includes('masala')) {
-      tips = [
-        "スパイスは弱火でじっくり炒めると香りが立ちます",
-        "玉ねぎをしっかり炒めることで甘みとコクが出ます",
-        "一晩寝かせるとさらに美味しくなります"
-      ];
-    } else if (name.includes('chicken') || name.includes('beef') || name.includes('pork')) {
-      tips = [
-        "肉は常温に戻してから調理すると均一に火が通ります",
-        "強火で表面を焼いて旨味を閉じ込めましょう",
-        "休ませる時間も大切です"
-      ];
-    } else if (name.includes('soup') || name.includes('broth')) {
-      tips = [
-        "野菜の旨味を引き出すためにじっくり煮込みましょう",
-        "塩加減は最後に調整するのがポイント",
-        "香草を加えると風味がアップします"
-      ];
-    } else {
-      tips = [
-        "材料の下準備をしっかりすることが美味しさの秘訣",
-        "火加減に注意して焦がさないように調理しましょう",
-        "味見をしながら調味料を調整してください"
-      ];
-    }
-    
-    // 地域別の副菜
-    let sideDishes = [];
-    if (region.includes('italian') || name.includes('pasta')) {
-      sideDishes = ["シーザーサラダ", "ガーリックブレッド", "ミネストローネ"];
-    } else if (region.includes('indian') || name.includes('curry')) {
-      sideDishes = ["バスマティライス", "ナン", "ヨーグルトサラダ"];
-    } else if (region.includes('chinese') || region.includes('thai')) {
-      sideDishes = ["白いご飯", "春雨サラダ", "わかめスープ"];
-    } else if (region.includes('mexican')) {
-      sideDishes = ["トルティーヤ", "アボカドサラダ", "ライムライス"];
-    } else {
-      sideDishes = ["パン", "グリーンサラダ", "スープ"];
-    }
-    
-    return { tips, sideDishes };
-  };
-
-  const loadMoreWorldRecipes = useCallback(async () => {
+  const loadMoreWorldRecipes = async () => {
     if (isLoadingWorldRecipes) return;
     
     setIsLoadingWorldRecipes(true);
@@ -312,21 +158,16 @@ function App() {
               .map((step, i) => `${i + 1}. ${step.trim()}`)
           );
           
-          // コツと副菜を自動生成
-          const { tips, sideDishes } = generateTipsAndSideDishes(meal.strMeal, meal.strArea);
-          
           return {
             id: `world-${meal.idMeal}-${Date.now()}-${Math.random()}`, // 重複防止
             name: translateMealName(meal.strMeal),
-            description: `${translationSystem.translate(meal.strArea)}料理 - ${translationSystem.translate(meal.strCategory)}`,
+            description: `${translateArea(meal.strArea)}料理 - ${translateCategory(meal.strCategory)}`,
             image: meal.strMealThumb,
             cookingTime: '30分',
             difficulty: '普通',
             servings: 2,
             ingredients: ingredients,
             instructions: instructions,
-            tips: tips,
-            sideDishes: sideDishes,
             isWorldRecipe: true
           };
         });
@@ -339,9 +180,9 @@ function App() {
     } finally {
       setIsLoadingWorldRecipes(false);
     }
-  }, [isLoadingWorldRecipes]);
+  };
 
-  const allRecipes = useMemo(() => [...recipesData, ...worldRecipes], [worldRecipes]);
+  const allRecipes = [...recipesData, ...worldRecipes];
   
   const categories = ['すべて', '和食', 'パスタ', '中華', 'カレー', '丼もの', '世界の料理'];
   const ingredients = ['鶏肉', '豚肉', '牛肉', '卵', '玉ねぎ', 'きのこ', 'トマト', 'じゃがいも'];
@@ -369,28 +210,26 @@ function App() {
     return '世界の料理';
   };
   
-  const filteredRecipes = useMemo(() => {
-    return allRecipes.filter(recipe => {
-      // テキスト検索
-      const matchesSearch = searchQuery === '' || 
-        recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recipe.ingredients.some(ingredient => ingredient.toLowerCase().includes(searchQuery.toLowerCase()));
-      
-      // カテゴリーフィルター
-      const matchesCategory = selectedCategory === 'すべて' || getRecipeCategory(recipe) === selectedCategory;
-      
-      // 食材フィルター
-      const matchesIngredient = selectedIngredient === '' ||
-        recipe.ingredients.some(ingredient => ingredient.includes(selectedIngredient)) ||
-        recipe.name.includes(selectedIngredient);
-      
-      return matchesSearch && matchesCategory && matchesIngredient;
-    });
-  }, [allRecipes, searchQuery, selectedCategory, selectedIngredient]);
+  const filteredRecipes = allRecipes.filter(recipe => {
+    // テキスト検索
+    const matchesSearch = searchQuery === '' || 
+      recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      recipe.ingredients.some(ingredient => ingredient.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    // カテゴリーフィルター
+    const matchesCategory = selectedCategory === 'すべて' || getRecipeCategory(recipe) === selectedCategory;
+    
+    // 食材フィルター
+    const matchesIngredient = selectedIngredient === '' ||
+      recipe.ingredients.some(ingredient => ingredient.includes(selectedIngredient)) ||
+      recipe.name.includes(selectedIngredient);
+    
+    return matchesSearch && matchesCategory && matchesIngredient;
+  });
   
   // セクション別にレシピを振り分け
-  const sectionRecipes = useMemo(() => {
+  const getSectionRecipes = () => {
     const summer = allRecipes.filter(recipe => {
       const name = recipe.name.toLowerCase();
       return name.includes('冷やし') || name.includes('サラダ') || name.includes('サラダ') || 
@@ -429,7 +268,9 @@ function App() {
     }).slice(0, 8);
     
     return { summer, quick, popular, withEgg, hearty, healthy };
-  }, [allRecipes]);
+  };
+  
+  const sectionRecipes = getSectionRecipes();
   
   // 絞り込みをクリア
   const clearFilters = () => {
@@ -1570,6 +1411,1002 @@ function App() {
     };
   }, [timerIntervals]);
 
+  // Clean up intervals on unmount
+      'chicken breast': '鶏むね肉',
+      'chicken thigh': '鶏もも肉',
+      'chicken wing': '手羽先',
+      'ground chicken': '鶏ひき肉',
+      'beef': '牛肉',
+      'ground beef': '牛ひき肉',
+      'beef steak': '牛ステーキ',
+      'pork': '豚肉',
+      'pork belly': '豚バラ肉',
+      'ground pork': '豚ひき肉',
+      'bacon': 'ベーコン',
+      'ham': 'ハム',
+      'sausage': 'ソーセージ',
+      'lamb': 'ラム肉',
+      'duck': '鴨肉',
+      'turkey': '七面鳥',
+      'fish': '魚',
+      'salmon': 'サーモン',
+      'tuna': 'マグロ',
+      'cod': 'タラ',
+      'sea bass': 'スズキ',
+      'mackerel': 'サバ',
+      'sardine': 'イワシ',
+      'shrimp': 'エビ',
+      'prawns': 'エビ',
+      'lobster': 'ロブスター',
+      'crab': 'カニ',
+      'scallop': 'ホタテ',
+      'oyster': 'カキ',
+      'clam': 'アサリ',
+      'mussel': 'ムール貝',
+      'squid': 'イカ',
+      'octopus': 'タコ',
+      // 野菜
+      'onion': '玉ねぎ',
+      'onions': '玉ねぎ',
+      'red onion': '赤玉ねぎ',
+      'green onion': '青ネギ',
+      'spring onion': '青ネギ',
+      'scallion': '青ネギ',
+      'leek': '長ネギ',
+      'garlic': 'にんにく',
+      'garlic clove': 'にんにく片',
+      'ginger': '生姜',
+      'ginger root': '生姜',
+      'tomato': 'トマト',
+      'tomatoes': 'トマト',
+      'cherry tomato': 'ミニトマト',
+      'cherry tomatoes': 'ミニトマト',
+      'baby plum tomato': 'ミニトマト',
+      'baby plum tomatoes': 'ミニトマト',
+      'plum tomato': 'プラムトマト',
+      'plum tomatoes': 'プラムトマト',
+      'potato': 'じゃがいも',
+      'potatoes': 'じゃがいも',
+      'sweet potato': 'さつまいも',
+      'carrot': '人参',
+      'carrots': '人参',
+      'celery': 'セロリ',
+      'lettuce': 'レタス',
+      'iceberg lettuce': 'アイスバーグレタス',
+      'romaine lettuce': 'ロメインレタス',
+      'cabbage': 'キャベツ',
+      'red cabbage': '紫キャベツ',
+      'spinach': 'ほうれん草',
+      'kale': 'ケール',
+      'broccoli': 'ブロッコリー',
+      'cauliflower': 'カリフラワー',
+      'corn': 'とうもろこし',
+      'baby corn': 'ヤングコーン',
+      'peas': 'グリーンピース',
+      'green peas': 'グリーンピース',
+      'snow peas': 'さやえんどう',
+      'bell pepper': 'パプリカ',
+      'green pepper': 'ピーマン',
+      'red pepper': '赤パプリカ',
+      'yellow pepper': '黄パプリカ',
+      'chili pepper': '唐辛子',
+      'jalapeno': 'ハラペーニョ',
+      'cucumber': 'きゅうり',
+      'mushroom': 'マッシュルーム',
+      'mushrooms': 'マッシュルーム',
+      'shiitake': 'しいたけ',
+      'shiitake mushroom': 'しいたけ',
+      'enoki': 'えのき',
+      'button mushroom': 'マッシュルーム',
+      'zucchini': 'ズッキーニ',
+      'eggplant': 'なす',
+      'aubergine': 'なす',
+      'pumpkin': 'かぼちゃ',
+      'squash': 'かぼちゃ',
+      'radish': '大根',
+      'daikon': '大根',
+      'turnip': 'かぶ',
+      'beet': 'ビーツ',
+      'beetroot': 'ビーツ',
+      'asparagus': 'アスパラガス',
+      'green beans': 'さやいんげん',
+      'string beans': 'さやいんげん',
+      'okra': 'オクラ',
+      'brussels sprouts': '芽キャベツ',
+      'artichoke': 'アーティチョーク',
+      'fennel': 'フェンネル',
+      // 果物
+      'apple': 'りんご',
+      'banana': 'バナナ',
+      'strawberry': 'いちご',
+      'strawberries': 'いちご',
+      'blueberry': 'ブルーベリー',
+      'blueberries': 'ブルーベリー',
+      'raspberry': 'ラズベリー',
+      'raspberries': 'ラズベリー',
+      'blackberry': 'ブラックベリー',
+      'blackberries': 'ブラックベリー',
+      'pineapple': 'パイナップル',
+      'mango': 'マンゴー',
+      'papaya': 'パパイヤ',
+      'avocado': 'アボカド',
+      'grape': 'ぶどう',
+      'grapes': 'ぶどう',
+      'cherry': 'さくらんぼ',
+      'cherries': 'さくらんぼ',
+      'peach': '桃',
+      'peaches': '桃',
+      'pear': '洋なし',
+      'pears': '洋なし',
+      'plum': 'プラム',
+      'apricot': 'アプリコット',
+      'fig': 'いちじく',
+      'date': 'デーツ',
+      'watermelon': 'スイカ',
+      'melon': 'メロン',
+      'cantaloupe': 'カンタロープメロン',
+      'honeydew': 'ハニーデューメロン',
+      'kiwi': 'キウイ',
+      'pomegranate': 'ザクロ',
+      'passion fruit': 'パッションフルーツ',
+      // ハーブ・香味野菜
+      'basil': 'バジル',
+      'fresh basil': 'フレッシュバジル',
+      'dried basil': '乾燥バジル',
+      'parsley': 'パセリ',
+      'flat-leaf parsley': 'イタリアンパセリ',
+      'cilantro': 'パクチー',
+      'coriander leaves': 'パクチー',
+      'mint': 'ミント',
+      'fresh mint': 'フレッシュミント',
+      'thyme': 'タイム',
+      'fresh thyme': 'フレッシュタイム',
+      'dried thyme': '乾燥タイム',
+      'oregano': 'オレガノ',
+      'fresh oregano': 'フレッシュオレガノ',
+      'dried oregano': '乾燥オレガノ',
+      'rosemary': 'ローズマリー',
+      'fresh rosemary': 'フレッシュローズマリー',
+      'sage': 'セージ',
+      'tarragon': 'タラゴン',
+      'dill': 'ディル',
+      'chives': 'チャイブ',
+      'bay leaf': 'ローリエ',
+      'bay leaves': 'ローリエ',
+      'lemongrass': 'レモングラス',
+      'kaffir lime leaves': 'こぶみかんの葉',
+      // 調味料・香辛料
+      'salt': '塩',
+      'sea salt': '海塩',
+      'kosher salt': 'コーシャーソルト',
+      'pepper': 'こしょう',
+      'black pepper': '黒こしょう',
+      'white pepper': '白こしょう',
+      'red pepper flakes': '唐辛子フレーク',
+      'chili powder': 'チリパウダー',
+      'cayenne pepper': 'カイエンペッパー',
+      'paprika': 'パプリカパウダー',
+      'smoked paprika': 'スモークパプリカ',
+      'cumin': 'クミン',
+      'ground cumin': 'クミンパウダー',
+      'cumin seeds': 'クミンシード',
+      'coriander': 'コリアンダー',
+      'ground coriander': 'コリアンダーパウダー',
+      'coriander seeds': 'コリアンダーシード',
+      'turmeric': 'ターメリック',
+      'curry powder': 'カレー粉',
+      'garam masala': 'ガラムマサラ',
+      'cinnamon': 'シナモン',
+      'ground cinnamon': 'シナモンパウダー',
+      'cinnamon stick': 'シナモンスティック',
+      'nutmeg': 'ナツメグ',
+      'clove': 'クローブ',
+      'cloves': 'クローブ',
+      'cardamom': 'カルダモン',
+      'star anise': '八角',
+      'fennel seeds': 'フェンネルシード',
+      'mustard seeds': 'マスタードシード',
+      'fenugreek': 'フェヌグリーク',
+      'saffron': 'サフラン',
+      'vanilla': 'バニラ',
+      'vanilla extract': 'バニラエッセンス',
+      'vanilla bean': 'バニラビーンズ',
+      // 調味料・ソース
+      'soy sauce': '醤油',
+      'light soy sauce': '薄口醤油',
+      'dark soy sauce': '濃口醤油',
+      'tamari': 'たまり醤油',
+      'miso': '味噌',
+      'miso paste': '味噌',
+      'white miso': '白味噌',
+      'red miso': '赤味噌',
+      'vinegar': '酢',
+      'rice vinegar': '米酢',
+      'apple cider vinegar': 'リンゴ酢',
+      'balsamic vinegar': 'バルサミコ酢',
+      'white wine vinegar': '白ワインビネガー',
+      'red wine vinegar': '赤ワインビネガー',
+      'mirin': 'みりん',
+      'sake': '日本酒',
+      'cooking sake': '料理酒',
+      'honey': 'はちみつ',
+      'maple syrup': 'メープルシロップ',
+      'agave': 'アガベシロップ',
+      'molasses': 'モラセス',
+      'mustard': 'マスタード',
+      'dijon mustard': 'ディジョンマスタード',
+      'whole grain mustard': '粒マスタード',
+      'ketchup': 'ケチャップ',
+      'tomato ketchup': 'トマトケチャップ',
+      'mayonnaise': 'マヨネーズ',
+      'worcestershire sauce': 'ウスターソース',
+      'fish sauce': '魚醤',
+      'oyster sauce': 'オイスターソース',
+      'hoisin sauce': '海鮮醤',
+      'sriracha': 'シラチャーソース',
+      'hot sauce': 'ホットソース',
+      'tabasco': 'タバスコ',
+      'bbq sauce': 'バーベキューソース',
+      'teriyaki sauce': '照り焼きソース',
+      'ponzu': 'ポン酢',
+      'tahini': 'タヒニ',
+      'peanut butter': 'ピーナッツバター',
+      'almond butter': 'アーモンドバター',
+      // オイル・油脂
+      'oil': '油',
+      'olive oil': 'オリーブオイル',
+      'extra virgin olive oil': 'エクストラバージンオリーブオイル',
+      'vegetable oil': 'サラダ油',
+      'canola oil': 'キャノーラ油',
+      'sunflower oil': 'ひまわり油',
+      'peanut oil': 'ピーナッツオイル',
+      'sesame oil': 'ごま油',
+      'coconut oil': 'ココナッツオイル',
+      'butter': 'バター',
+      'unsalted butter': '無塩バター',
+      'salted butter': '有塩バター',
+      'ghee': 'ギー',
+      'margarine': 'マーガリン',
+      'lard': 'ラード',
+      'shortening': 'ショートニング',
+      // 乳製品
+      'milk': '牛乳',
+      'whole milk': '全脂肪牛乳',
+      'low-fat milk': '低脂肪牛乳',
+      'skim milk': '無脂肪牛乳',
+      'buttermilk': 'バターミルク',
+      'cream': 'クリーム',
+      'heavy cream': '生クリーム',
+      'whipping cream': 'ホイップクリーム',
+      'half and half': 'ハーフアンドハーフ',
+      'sour cream': 'サワークリーム',
+      'yogurt': 'ヨーグルト',
+      'greek yogurt': 'ギリシャヨーグルト',
+      'plain yogurt': 'プレーンヨーグルト',
+      'cottage cheese': 'カッテージチーズ',
+      'ricotta': 'リコッタチーズ',
+      'cream cheese': 'クリームチーズ',
+      'cheese': 'チーズ',
+      'cheddar': 'チェダーチーズ',
+      'cheddar cheese': 'チェダーチーズ',
+      'mozzarella': 'モッツァレラチーズ',
+      'mozzarella cheese': 'モッツァレラチーズ',
+      'parmesan': 'パルメザンチーズ',
+      'parmesan cheese': 'パルメザンチーズ',
+      'swiss cheese': 'スイスチーズ',
+      'gouda': 'ゴーダチーズ',
+      'brie': 'ブリーチーズ',
+      'camembert': 'カマンベールチーズ',
+      'blue cheese': 'ブルーチーズ',
+      'feta': 'フェタチーズ',
+      'goat cheese': 'ゴートチーズ',
+      // 穀物・粉類
+      'rice': '米',
+      'white rice': '白米',
+      'brown rice': '玄米',
+      'jasmine rice': 'ジャスミンライス',
+      'basmati rice': 'バスマティライス',
+      'wild rice': 'ワイルドライス',
+      'sticky rice': 'もち米',
+      'flour': '小麦粉',
+      'all-purpose flour': '中力粉',
+      'bread flour': '強力粉',
+      'cake flour': '薄力粉',
+      'whole wheat flour': '全粒粉',
+      'self-raising flour': 'セルフレイジングフラワー',
+      'cornmeal': 'コーンミール',
+      'cornstarch': 'コーンスターチ',
+      'potato starch': '片栗粉',
+      'tapioca starch': 'タピオカ粉',
+      'rice flour': '米粉',
+      'bread': 'パン',
+      'white bread': '食パン',
+      'whole wheat bread': '全粒粉パン',
+      'sourdough': 'サワードウ',
+      'baguette': 'バゲット',
+      'ciabatta': 'チャバタ',
+      'pita': 'ピタパン',
+      'naan': 'ナン',
+      'tortilla': 'トルティーヤ',
+      'breadcrumbs': 'パン粉',
+      'panko': 'パン粉',
+      // パスタ・麺類
+      'pasta': 'パスタ',
+      'spaghetti': 'スパゲッティ',
+      'linguine': 'リングイネ',
+      'fettuccine': 'フェットチーネ',
+      'penne': 'ペンネ',
+      'rigatoni': 'リガトーニ',
+      'fusilli': 'フジッリ',
+      'farfalle': 'ファルファッレ（蝶々パスタ）',
+      'orecchiette': 'オレキエッテ',
+      'macaroni': 'マカロニ',
+      'lasagna': 'ラザニア',
+      'lasagna sheets': 'ラザニアシート',
+      'ravioli': 'ラビオリ',
+      'tortellini': 'トルテリーニ',
+      'gnocchi': 'ニョッキ',
+      'noodles': '麺',
+      'egg noodles': '卵麺',
+      'rice noodles': 'ライスヌードル',
+      'soba': 'そば',
+      'udon': 'うどん',
+      'ramen': 'ラーメン',
+      'glass noodles': '春雨',
+      'vermicelli': 'ビーフン',
+      // 豆類
+      'beans': '豆',
+      'black beans': '黒豆',
+      'kidney beans': 'レッドキドニービーンズ',
+      'pinto beans': 'ピント豆',
+      'navy beans': 'ネイビービーンズ',
+      'cannellini beans': 'カネリーニ豆',
+      'lima beans': 'ライマ豆',
+      'chickpeas': 'ひよこ豆',
+      'garbanzo beans': 'ひよこ豆',
+      'lentils': 'レンズ豆',
+      'red lentils': '赤レンズ豆',
+      'green lentils': '緑レンズ豆',
+      'split peas': 'スプリットピー',
+      'soy beans': '大豆',
+      'edamame': '枝豆',
+      'tofu': '豆腐',
+      'silken tofu': '絹ごし豆腐',
+      'firm tofu': '木綿豆腐',
+      'tempeh': 'テンペ',
+      // ナッツ・種実類
+      'almond': 'アーモンド',
+      'almonds': 'アーモンド',
+      'walnut': 'くるみ',
+      'walnuts': 'くるみ',
+      'cashew': 'カシューナッツ',
+      'cashews': 'カシューナッツ',
+      'peanut': 'ピーナッツ',
+      'peanuts': 'ピーナッツ',
+      'pecan': 'ピーカン',
+      'pecans': 'ピーカン',
+      'macadamia': 'マカダミアナッツ',
+      'hazelnut': 'ヘーゼルナッツ',
+      'pine nuts': '松の実',
+      'pistachio': 'ピスタチオ',
+      'sesame': 'ごま',
+      'sesame seeds': 'ごま',
+      'poppy seeds': 'ポピーシード',
+      'sunflower seeds': 'ひまわりの種',
+      'pumpkin seeds': 'かぼちゃの種',
+      'chia seeds': 'チアシード',
+      'flax seeds': '亜麻仁',
+      'flaxseed': '亜麻仁',
+      // その他の材料
+      'egg': '卵',
+      'eggs': '卵',
+      'egg white': '卵白',
+      'egg yolk': '卵黄',
+      'sugar': '砂糖',
+      'granulated sugar': 'グラニュー糖',
+      'caster sugar': '上白糖',
+      'powdered sugar': '粉糖',
+      'confectioners sugar': '粉糖',
+      'brown sugar': 'ブラウンシュガー',
+      'light brown sugar': 'ライトブラウンシュガー',
+      'dark brown sugar': 'ダークブラウンシュガー',
+      'palm sugar': 'パームシュガー',
+      'coconut sugar': 'ココナッツシュガー',
+      'water': '水',
+      'ice': '氷',
+      'stock': 'だし',
+      'broth': 'ブイヨン',
+      'chicken stock': 'チキンスープ',
+      'chicken broth': 'チキンブイヨン',
+      'beef stock': 'ビーフスープ',
+      'beef broth': 'ビーフブイヨン',
+      'vegetable stock': '野菜スープ',
+      'vegetable broth': '野菜ブイヨン',
+      'dashi': 'だし',
+      'wine': 'ワイン',
+      'red wine': '赤ワイン',
+      'white wine': '白ワイン',
+      'beer': 'ビール',
+      'coconut milk': 'ココナッツミルク',
+      'coconut cream': 'ココナッツクリーム',
+      'evaporated milk': 'エバミルク',
+      'condensed milk': 'コンデンスミルク',
+      // ベーキング材料
+      'baking powder': 'ベーキングパウダー',
+      'baking soda': '重曹',
+      'yeast': 'イースト',
+      'dry yeast': 'ドライイースト',
+      'active dry yeast': 'アクティブドライイースト',
+      'instant yeast': 'インスタントイースト',
+      'gelatin': 'ゼラチン',
+      'agar': '寒天',
+      'cocoa': 'ココア',
+      'cocoa powder': 'ココアパウダー',
+      'chocolate': 'チョコレート',
+      'dark chocolate': 'ダークチョコレート',
+      'milk chocolate': 'ミルクチョコレート',
+      'white chocolate': 'ホワイトチョコレート',
+      'chocolate chips': 'チョコチップ',
+      // パン・ペストリー関連  
+      'phyllo': 'フィロ',
+      'phyllo dough': 'フィロ生地',
+      'puff pastry': 'パイ生地',
+      'pie crust': 'パイ生地',
+      'pizza dough': 'ピザ生地'
+    };
+    
+    let translated = ingredient.toLowerCase();
+    
+    // 長い語句から変換（例："extra virgin olive oil" を "olive oil" より先に）
+    const sortedTranslations = Object.entries(translations)
+      .sort(([a], [b]) => b.length - a.length);
+    
+    sortedTranslations.forEach(([en, jp]) => {
+      const regex = new RegExp(`\\b${en}\\b`, 'gi');
+      translated = translated.replace(regex, jp);
+    });
+    
+    return translated;
+  };
+  
+  const translateArea = (area) => {
+    if (!area) return '';
+    const areas = {
+      'American': 'アメリカ',
+      'British': 'イギリス',
+      'Canadian': 'カナダ',
+      'Chinese': '中華',
+      'Croatian': 'クロアチア',
+      'Dutch': 'オランダ',
+      'Egyptian': 'エジプト',
+      'French': 'フランス',
+      'Greek': 'ギリシャ',
+      'Indian': 'インド',
+      'Irish': 'アイルランド',
+      'Italian': 'イタリア',
+      'Jamaican': 'ジャマイカ',
+      'Japanese': '日本',
+      'Kenyan': 'ケニア',
+      'Malaysian': 'マレーシア',
+      'Mexican': 'メキシコ',
+      'Moroccan': 'モロッコ',
+      'Polish': 'ポーランド',
+      'Portuguese': 'ポルトガル',
+      'Russian': 'ロシア',
+      'Spanish': 'スペイン',
+      'Thai': 'タイ',
+      'Tunisian': 'チュニジア',
+      'Turkish': 'トルコ',
+      'Unknown': 'その他',
+      'Vietnamese': 'ベトナム'
+    };
+    return areas[area] || area;
+  };
+  
+  const translateCategory = (category) => {
+    if (!category) return '';
+    const categories = {
+      'Beef': 'ビーフ',
+      'Breakfast': '朝食',
+      'Chicken': 'チキン',
+      'Dessert': 'デザート',
+      'Goat': 'ヤギ肉',
+      'Lamb': 'ラム',
+      'Miscellaneous': 'その他',
+      'Pasta': 'パスタ',
+      'Pork': 'ポーク',
+      'Seafood': 'シーフード',
+      'Side': 'サイドディッシュ',
+      'Starter': '前菜',
+      'Vegan': 'ビーガン',
+      'Vegetarian': 'ベジタリアン'
+    };
+    return categories[category] || category;
+  };
+  
+  const translateMealName = (name) => {
+    const translations = {
+      // 料理のベース材料
+      'chicken': '鶏肉',
+      'beef': '牛肉',
+      'pork': '豚肉',
+      'lamb': 'ラム',
+      'fish': '魚',
+      'seafood': 'シーフード',
+      'shrimp': 'エビ',
+      'salmon': 'サーモン',
+      'tuna': 'マグロ',
+      'vegetable': '野菜',
+      'meat': '肉',
+      // 料理の種類
+      'curry': 'カレー',
+      'rice': 'ライス',
+      'fried rice': 'チャーハン',
+      'noodle': 'ヌードル',
+      'noodles': 'ヌードル',
+      'soup': 'スープ',
+      'salad': 'サラダ',
+      'stew': 'シチュー',
+      'pasta': 'パスタ',
+      'spaghetti': 'スパゲッティ',
+      'lasagna': 'ラザニア',
+      'sandwich': 'サンドイッチ',
+      'burger': 'バーガー',
+      'hamburger': 'ハンバーガー',
+      'pizza': 'ピザ',
+      'pie': 'パイ',
+      'tart': 'タルト',
+      'quiche': 'キッシュ',
+      'casserole': 'キャセロール',
+      'gratin': 'グラタン',
+      'risotto': 'リゾット',
+      'paella': 'パエリア',
+      'kebab': 'ケバブ',
+      'tacos': 'タコス',
+      'burrito': 'ブリトー',
+      'enchilada': 'エンチラーダ',
+      'fajita': 'ファヒータ',
+      'quesadilla': 'ケサディーヤ',
+      // 調理法
+      'grilled': 'グリル',
+      'fried': 'フライド',
+      'baked': 'ベイクド',
+      'roasted': 'ロースト',
+      'steamed': '蒸し',
+      'stir-fried': '炒め',
+      'stir fry': '炒め',
+      'teriyaki': '照り焼き',
+      'tempura': '天ぷら',
+      'karaage': '唐揚げ',
+      'katsu': 'カツ',
+      'sauteed': 'ソテー',
+      'braised': '煮込み',
+      'poached': 'ポーチド',
+      'smoked': 'スモーク',
+      'barbecue': 'バーベキュー',
+      'bbq': 'BBQ',
+      'asado': 'アサード',
+      'carne asada': 'カルネアサーダ',
+      // 地域料理
+      'mediterranean': '地中海風',
+      'italian': 'イタリアン',
+      'french': 'フレンチ',
+      'spanish': 'スペイン風',
+      'greek': 'ギリシャ風',
+      'mexican': 'メキシカン',
+      'thai': 'タイ風',
+      'chinese': '中華風',
+      'japanese': '和風',
+      'korean': '韓国風',
+      'indian': 'インド風',
+      'vietnamese': 'ベトナム風',
+      'moroccan': 'モロッコ風',
+      'middle eastern': '中東風',
+      'american': 'アメリカン',
+      'british': 'ブリティッシュ',
+      'german': 'ドイツ風',
+      // その他の料理名
+      'breakfast': '朝食',
+      'lunch': 'ランチ',
+      'dinner': 'ディナー',
+      'appetizer': '前菜',
+      'main': 'メイン',
+      'dessert': 'デザート',
+      'snack': 'スナック',
+      'side dish': 'サイドディッシュ',
+      'hot pot': '鍋',
+      'bowl': 'ボウル',
+      'wrap': 'ラップ',
+      'roll': 'ロール',
+      'spring roll': '春巻き',
+      'egg roll': '卵巻き',
+      'dumpling': '餃子',
+      'meatball': 'ミートボール',
+      'meatloaf': 'ミートローフ',
+      'omelet': 'オムレツ',
+      'omelette': 'オムレツ',
+      'frittata': 'フリッタータ',
+      'pancake': 'パンケーキ',
+      'crepe': 'クレープ',
+      'waffle': 'ワッフル',
+      'toast': 'トースト',
+      'bruschetta': 'ブルスケッタ',
+      'crostini': 'クロスティーニ',
+      // スタイル・特徴
+      'spicy': 'スパイシー',
+      'sweet': 'スイート',
+      'sour': 'サワー',
+      'savory': 'セイボリー',
+      'crispy': 'クリスピー',
+      'creamy': 'クリーミー',
+      'healthy': 'ヘルシー',
+      'light': 'ライト',
+      'rich': 'リッチ',
+      'classic': 'クラシック',
+      'traditional': '伝統的な',
+      'modern': 'モダン',
+      'fusion': 'フュージョン',
+      'homemade': '自家製',
+      'authentic': '本格',
+      'quick': 'クイック',
+      'easy': '簡単',
+      'simple': 'シンプル'
+    };
+    
+    let translated = name;
+    
+    // 長い語句から変換（例："stir-fried" を "fried" より先に）
+    const sortedTranslations = Object.entries(translations)
+      .sort(([a], [b]) => b.length - a.length);
+    
+    sortedTranslations.forEach(([en, jp]) => {
+      translated = translated.replace(new RegExp(`\\b${en}\\b`, 'gi'), jp);
+    });
+    
+    // "and" と "&" を "と" に変換
+    translated = translated.replace(/\s+and\s+/gi, 'と');
+    translated = translated.replace(/\s*&\s*/g, 'と');
+    
+    // "with" を "〜入り" または "〜添え" に変換
+    translated = translated.replace(/\s+with\s+/gi, '〜');
+    
+    // "in" を "〜風" に変換（ソースの場合）
+    translated = translated.replace(/\s+in\s+(\S+)\s+sauce/gi, '〜$1ソース');
+    
+    return translated;
+  };
+  
+  const translateInstructions = (instructions) => {
+    if (!instructions) return instructions;
+    
+    const cookingTerms = {
+      // 基本的な調理動作
+      'heat': '加熱する',
+      'preheat': '予熱する',
+      'cook': '調理する',
+      'prepare': '準備する',
+      'make': '作る',
+      'create': '作る',
+      'put': '入れる',
+      'put the': '〜を入れる',
+      'place': '置く',
+      'turn': 'ひっくり返す',
+      'turn the': '〜をひっくり返す',
+      'continue': '続ける',
+      'over': '〜の上に',
+      'cover': '蓋をする',
+      'cover the pot': '鍋に蓋をする',
+      'let': '〜させる',
+      'set aside': '取り置く',
+      'bring': '沸騰させる',
+      'bring to': '〜にする',
+      'bring to a boil': '沸騰させる',
+      // 加熱調理
+      'boil': '茹でる',
+      'simmer': '弱火で煮る',
+      'steam': '蒸す',
+      'blanch': '湯通しする',
+      'poach': '落とし卵にする',
+      'braise': '煮込む',
+      'stew': '煮込む',
+      // 炒め・焼き
+      'fry': '揚げる',
+      'deep fry': '揚げる',
+      'shallow fry': '少ない油で焼く',
+      'stir fry': '炒める',
+      'stir-fry': '炒める',
+      'saute': 'ソテーする',
+      'sauté': 'ソテーする',
+      'pan fry': 'フライパンで焼く',
+      'pan-fry': 'フライパンで焼く',
+      'sear': '表面を焼く',
+      'brown': 'こんがり焼く',
+      'caramelize': 'カラメル状にする',
+      // オーブン調理
+      'bake': 'オーブンで焼く',
+      'roast': 'ローストする',
+      'broil': '直火で焼く',
+      'grill': 'グリルで焼く',
+      'barbecue': 'バーベキューする',
+      'toast': 'トーストする',
+      // 切る・処理
+      'cut': '切る',
+      'slice': 'スライスする',
+      'dice': 'さいの目切りにする',
+      'chop': '刻む',
+      'mince': 'みじん切りにする',
+      'julienne': '千切りにする',
+      'shred': '細切りにする',
+      'grate': 'すりおろす',
+      'peel': '皮をむく',
+      'trim': '整える',
+      'core': '芯を取る',
+      'devein': '背わたを取る',
+      'butterfly': '開きにする',
+      // 混ぜる・合わせる
+      'mix': '混ぜる',
+      'stir': 'かき混ぜる',
+      'blend': 'ブレンドする',
+      'combine': '合わせる',
+      'fold': 'さっくり混ぜる',
+      'fold in': 'さっくり混ぜる',
+      'whisk': '泡立てる',
+      'beat': '混ぜる',
+      'whip': '泡立てる',
+      'knead': 'こねる',
+      'toss': '和える',
+      'coat': 'まぶす',
+      // 調味・味付け
+      'season': '味付けする',
+      'season with': '〜で味付けする',
+      'add': '加える',
+      'pour': '注ぐ',
+      'drizzle': 'かける',
+      'sprinkle': '振りかける',
+      'garnish': '飾る',
+      'marinate': 'マリネする',
+      'marinade': 'マリネ液',
+      'baste': '肉汁をかける',
+      'glaze': 'つやを出す',
+      'taste': '味見する',
+      'adjust': '調整する',
+      // その他の動作
+      'drain': '水を切る',
+      'strain': 'こす',
+      'sift': 'ふるう',
+      'melt': '溶かす',
+      'dissolve': '溶かす',
+      'cool': '冷ます',
+      'chill': '冷やす',
+      'refrigerate': '冷蔵する',
+      'freeze': '冷凍する',
+      'thaw': '解凍する',
+      'rest': '休ませる',
+      'let stand': 'そのまま置く',
+      'set aside': '取り置く',
+      'serve': '盛り付ける',
+      'plate': '皿に盛る',
+      'arrange': '並べる',
+      'transfer': '移す',
+      'remove': '取り除く',
+      'discard': '捨てる',
+      'reserve': '取っておく',
+      'repeat': '繰り返す',
+      'continue': '続ける',
+      // 時間・状態
+      'for': '〜間',
+      'until': '〜まで',
+      'about': '約',
+      'approximately': '約',
+      'minutes': '分',
+      'minute': '分',
+      'hours': '時間',
+      'hour': '時間',
+      'seconds': '秒',
+      'occasionally': '時々',
+      'frequently': '頻繁に',
+      'constantly': '絶えず',
+      'immediately': 'すぐに',
+      'gradually': '徐々に',
+      'slowly': 'ゆっくり',
+      'quickly': '素早く',
+      'gently': '優しく',
+      'carefully': '注意深く',
+      'thoroughly': 'しっかり',
+      'completely': '完全に',
+      'evenly': '均等に',
+      'lightly': '軽く',
+      'heavily': 'たっぷり',
+      'until golden': 'きつね色になるまで',
+      'until golden brown': 'きつね色になるまで',
+      'until tender': '柔らかくなるまで',
+      'until soft': '柔らかくなるまで',
+      'until crispy': 'カリカリになるまで',
+      'until melted': '溶けるまで',
+      'until smooth': 'なめらかになるまで',
+      'until combined': '混ざるまで',
+      'until fragrant': '香りが立つまで',
+      'al dente': 'アルデンテ',
+      // 調理器具
+      'in a': '〜で',
+      'in the': '〜で',
+      'on a': '〜の上で',
+      'on the': '〜の上で',
+      'pan': 'フライパン',
+      'pot': '鍋',
+      'skillet': 'スキレット',
+      'saucepan': '片手鍋',
+      'wok': '中華鍋',
+      'oven': 'オーブン',
+      'microwave': '電子レンジ',
+      'bowl': 'ボウル',
+      'plate': '皿',
+      'dish': '皿',
+      'baking dish': '耐熱皿',
+      'baking sheet': '天板',
+      'cutting board': 'まな板',
+      'knife': 'ナイフ',
+      'spoon': 'スプーン',
+      'fork': 'フォーク',
+      'spatula': 'ヘラ',
+      'whisk': '泡立て器',
+      'tongs': 'トング',
+      'ladle': 'お玉',
+      'strainer': 'ざる',
+      'colander': 'コランダー',
+      'measuring cup': '計量カップ',
+      'measuring spoon': '計量スプーン',
+      // 温度・火加減
+      'high heat': '強火',
+      'medium-high heat': '中強火',
+      'medium heat': '中火',
+      'medium-low heat': '中弱火',
+      'low heat': '弱火',
+      'simmer': 'とろ火',
+      'gentle heat': '弱火',
+      'bring to a boil': '沸騰させる',
+      'bring to a simmer': '弱火にする',
+      'reduce heat': '火を弱める',
+      'increase heat': '火を強める',
+      'turn off heat': '火を止める',
+      'remove from heat': '火からおろす',
+      // 温度
+      'degrees': '度',
+      'fahrenheit': '華氏',
+      'celsius': '摂氏',
+      'room temperature': '常温',
+      'lukewarm': 'ぼんやり温かい',
+      'warm': '温かい',
+      'hot': '熱い',
+      'cold': '冷たい',
+      'chilled': '冷やした',
+      'frozen': '冷凍の',
+      // 接続詞・前置詞
+      'and': 'そして',
+      'or': 'または',
+      'with': '〜と一緒に',
+      'without': '〜なしで',
+      'into': '〜に',
+      'onto': '〜の上に',
+      'over': '〜の上に',
+      'under': '〜の下に',
+      'through': '〜を通して',
+      'between': '〜の間に',
+      'among': '〜の中に',
+      'from': '〜から',
+      'to': '〜に',
+      'in half': '半分に',
+      'in thirds': '3等分に',
+      'in quarters': '4等分に',
+      'lengthwise': '縦に',
+      'crosswise': '横に',
+      'diagonally': '斜めに',
+      // 追加の重要な語句
+      'the same': '同じ',
+      'opposite': '反対',
+      'opposite side': '反対側',
+      'side': '側',
+      'clean plate': '清潔な皿',
+      'clean': '清潔な',
+      'along with': '〜と一緒に',
+      'remaining': '残りの',
+      'marinated': 'マリネした',
+      'cube': '角切り',
+      'cubes': '角切り',
+      'soften': '柔らかくする',
+      'softens': '柔らかくなる',
+      'reduces': '煮詰まる',
+      'reduce': '煮詰める',
+      'melt': '溶ける',
+      'melts': '溶ける',
+      'where': '〜したところで',
+      'where the': '〜したところで',
+      'doing': 'する',
+      'browns': 'こんがり焼ける',
+      'fried': '炒めた',
+      'was': 'だった',
+      'from the pan': 'フライパンから',
+      'from': '〜から',
+      'on a': '〜の上に',
+      'on the': '〜の上に',
+      'do the same': '同じようにする',
+      'set': '置く',
+      'save': '取っておく',
+      'sauce': 'ソース',
+      'in the sauce': 'ソースに',
+      'let it': 'そのまま〜させる',
+      'until it': '〜まで',
+      'mix': '混ぜる',
+      'remove from the pan': 'フライパンから取り出す',
+      'remove from': '〜から取り出す',
+      'remove': '取り出す',
+      'tablespoons': '大さじ',
+      'tablespoon': '大さじ',
+      'and let it': 'そして〜させる',
+      'until': '〜まで'
+    };
+    
+    // 文字列の場合の処理
+    if (typeof instructions === 'string') {
+      let translated = instructions;
+      
+      // 最初に材料名を翻訳
+      translated = translateIngredient(translated);
+      
+      // 長いフレーズから順に翻訳
+      const sortedTerms = Object.entries(cookingTerms)
+        .sort(([a], [b]) => b.length - a.length);
+      
+      sortedTerms.forEach(([en, jp]) => {
+        const regex = new RegExp(`\\b${en}\\b`, 'gi');
+        translated = translated.replace(regex, jp);
+      });
+      
+      return translated;
+    }
+    
+    // 配列の場合の処理
+    if (Array.isArray(instructions)) {
+      const translatedArray = instructions.map(step => {
+        let translated = step;
+        
+        // 最初に材料名を翻訳
+        translated = translateIngredient(translated);
+        
+        // 長いフレーズから順に翻訳
+        const sortedTerms = Object.entries(cookingTerms)
+          .sort(([a], [b]) => b.length - a.length);
+        
+        sortedTerms.forEach(([en, jp]) => {
+          const regex = new RegExp(`\\b${en}\\b`, 'gi');
+          translated = translated.replace(regex, jp);
+        });
+        
+        // ステップ番号を保持
+        if (/^\d+\./.test(translated)) {
+          return translated;
+        } else if (/^\d+/.test(step)) {
+          // 番号だけの場合
+          const num = step.match(/^(\d+)/)[1];
+          return translated.replace(/^\d+/, `${num}.`);
+        }
+        
+        return translated;
+      });
+      
+      return translatedArray;
+    }
+    
+    return instructions;
+  };
+
+  // Clean up intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(timerIntervals).forEach(interval => clearInterval(interval));
+    };
+  }, [timerIntervals]);
+
 
   const getAdjustedIngredients = (recipe) => {
     const servings = selectedServings[recipe.id] || recipe.servings;
@@ -1642,7 +2479,7 @@ function App() {
     });
   };
 
-  const RecipeSection = React.memo(({ title, recipes, icon }) => (
+  const RecipeSection = ({ title, recipes, icon }) => (
     <div className="recipe-section">
       <h3 className="section-title-netflix">
         {icon} {title}
@@ -1656,7 +2493,7 @@ function App() {
               onClick={() => openRecipe(recipe)}
             >
               <div className="netflix-card-image">
-                <LazyImage src={recipe.image} alt={recipe.name} />
+                <img src={recipe.image} alt={recipe.name} />
                 {recipe.isWorldRecipe && (
                   <div className="world-badge-netflix">🌍</div>
                 )}
@@ -1676,7 +2513,7 @@ function App() {
         </div>
       </div>
     </div>
-  ));
+  );
 
   
   const renderHome = () => (
@@ -1782,7 +2619,7 @@ function App() {
                 onClick={() => openRecipe(recipe)}
               >
                 <div className="recipe-image">
-                  <LazyImage src={recipe.image} alt={recipe.name} />
+                  <img src={recipe.image} alt={recipe.name} />
                   {recipe.isWorldRecipe && (
                     <div className="world-recipe-badge">🌍</div>
                   )}
@@ -1848,7 +2685,7 @@ function App() {
             onClick={() => openRecipe(recipe)}
           >
             <div className="recipe-image">
-              <LazyImage src={recipe.image} alt={recipe.name} />
+              <img src={recipe.image} alt={recipe.name} />
               {openRecipes.find(r => r.id === recipe.id) && (
                 <div className="opened-badge">開いています</div>
               )}
@@ -1882,7 +2719,7 @@ function App() {
               onClick={() => openRecipe(recipe)}
             >
               <div className="recipe-image">
-                <LazyImage src={recipe.image} alt={recipe.name} />
+                <img src={recipe.image} alt={recipe.name} />
                 {openRecipes.find(r => r.id === recipe.id) && (
                   <div className="opened-badge">開いています</div>
                 )}
@@ -2001,7 +2838,7 @@ function App() {
           )}
 
           <div className="recipe-hero">
-            <LazyImage src={selectedRecipe.image} alt={selectedRecipe.name} />
+            <img src={selectedRecipe.image} alt={selectedRecipe.name} />
             <div className="recipe-hero-content">
               <h1>{selectedRecipe.name}</h1>
               <p>{selectedRecipe.description}</p>
@@ -2077,20 +2914,6 @@ function App() {
                 })}
               </ul>
             </div>
-
-            {/* 料理のコツセクション */}
-            {selectedRecipe.tips && selectedRecipe.tips.length > 0 && (
-              <div className="tips-section">
-                <h3>💡 料理のコツ</h3>
-                <ul className="tips-list">
-                  {selectedRecipe.tips.map((tip, index) => (
-                    <li key={index} className="tip-item">
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
             
             <div className="instructions-section">
               <h3>作り方</h3>
@@ -2154,37 +2977,6 @@ function App() {
                 })}
               </ol>
             </div>
-
-            {/* 副菜提案セクション */}
-            {selectedRecipe.sideDishes && selectedRecipe.sideDishes.length > 0 && (
-              <div className="side-dishes-section">
-                <h3>🍱 おすすめの副菜</h3>
-                <div className="side-dishes-list">
-                  {selectedRecipe.sideDishes.map((sideDish, index) => {
-                    // 副菜が既存のレシピに存在するかチェック
-                    const matchingRecipe = allRecipes.find(recipe => 
-                      recipe.name.includes(sideDish) || sideDish.includes(recipe.name)
-                    );
-                    
-                    return (
-                      <div key={index} className="side-dish-item">
-                        {matchingRecipe ? (
-                          <button 
-                            className="side-dish-link"
-                            onClick={() => openRecipe(matchingRecipe)}
-                          >
-                            {sideDish}
-                            <span className="link-icon">→</span>
-                          </button>
-                        ) : (
-                          <span className="side-dish-text">{sideDish}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
             
             <div className="memo-section">
               <div className="memo-header">
@@ -2261,15 +3053,6 @@ function App() {
     <div className="App mobile-app">
       <header className="app-header">
         <h1>🍳 レシピアプリ</h1>
-        {(showInstallPrompt || process.env.NODE_ENV === 'development') && (
-          <button 
-            className="install-button"
-            onClick={handleInstallApp}
-            title="ホーム画面に追加"
-          >
-            📱 {showInstallPrompt ? 'アプリをインストール' : 'インストール(デバッグ)'}
-          </button>
-        )}
       </header>
       
       <main className="app-main">

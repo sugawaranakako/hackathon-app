@@ -25,18 +25,45 @@ body {
 .app-header {
   background: linear-gradient(135deg, #FF6B35, #E55A2B);
   color: white;
-  padding: 20px 20px 15px;
-  text-align: center;
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
 }
 
 .app-header h1 {
   font-size: 1.75rem;
   font-weight: 600;
   margin: 0;
+  flex-grow: 1;
+}
+
+.install-button {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+  margin-left: 10px;
+}
+
+.install-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.install-button:active {
+  transform: translateY(0);
 }
 
 .app-main {
@@ -1596,6 +1623,7 @@ body {
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s ease;
+  will-change: transform;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   border: 1px solid #E8DDD5;
 }
@@ -1617,6 +1645,7 @@ body {
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
+  will-change: transform;
 }
 
 .netflix-recipe-card:hover .netflix-card-image img {
@@ -1747,4 +1776,125 @@ body {
     grid-template-columns: 1fr;
     gap: 12px;
   }
+}
+
+/* 料理のコツセクション */
+.tips-section {
+  background: linear-gradient(135deg, #FFF8E1, #F3E5AB);
+  border-radius: 16px;
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid #E8DDD5;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.tips-section h3 {
+  color: #D84315;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tips-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tip-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-left: 4px solid #FF6B35;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #2C1810;
+  position: relative;
+}
+
+.tip-item:before {
+  content: "💡";
+  position: absolute;
+  left: -2px;
+  top: 12px;
+  font-size: 14px;
+}
+
+.tip-item:last-child {
+  margin-bottom: 0;
+}
+
+/* 副菜提案セクション */
+.side-dishes-section {
+  background: linear-gradient(135deg, #E8F5E8, #C8E6C9);
+  border-radius: 16px;
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid #E8DDD5;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.side-dishes-section h3 {
+  color: #2E7D32;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.side-dishes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-dish-item {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.side-dish-link {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 12px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  color: #2C1810;
+  border-left: 4px solid #4CAF50;
+}
+
+.side-dish-link:hover {
+  background: rgba(76, 175, 80, 0.1);
+  transform: translateX(4px);
+}
+
+.side-dish-text {
+  display: block;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  color: #2C1810;
+  border-left: 4px solid #81C784;
+}
+
+.link-icon {
+  color: #4CAF50;
+  font-weight: bold;
+  transition: transform 0.3s ease;
+}
+
+.side-dish-link:hover .link-icon {
+  transform: translateX(4px);
 }
