@@ -28,6 +28,15 @@ function App() {
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [cookingMode, setCookingMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [shoppingList, setShoppingList] = useState([]);
+  const [editingShoppingItem, setEditingShoppingItem] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('');
+  const [newItemCategory, setNewItemCategory] = useState('その他');
+  const [activeRecipeTab, setActiveRecipeTab] = useState('recipe');
+  const [weeklyMenu, setWeeklyMenu] = useState([]);
+  const [currentWeekStart, setCurrentWeekStart] = useState(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('checkedIngredients');
@@ -39,11 +48,42 @@ function App() {
     if (savedMemos) {
       setMemos(JSON.parse(savedMemos));
     }
+    
+    const savedShoppingList = localStorage.getItem('shoppingList');
+    if (savedShoppingList) {
+      setShoppingList(JSON.parse(savedShoppingList));
+    }
+    
+    const savedWeeklyMenu = localStorage.getItem('weeklyMenu');
+    if (savedWeeklyMenu) {
+      setWeeklyMenu(JSON.parse(savedWeeklyMenu));
+    }
+    
+    const savedCurrentWeek = localStorage.getItem('currentWeekStart');
+    if (savedCurrentWeek) {
+      setCurrentWeekStart(savedCurrentWeek);
+    } else {
+      // 今週の月曜日を取得
+      const today = new Date();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
+      const weekStart = monday.toISOString().split('T')[0];
+      setCurrentWeekStart(weekStart);
+      localStorage.setItem('currentWeekStart', weekStart);
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem('checkedIngredients', JSON.stringify(checkedIngredients));
   }, [checkedIngredients]);
+
+  useEffect(() => {
+    localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
+  }, [shoppingList]);
+
+  useEffect(() => {
+    localStorage.setItem('weeklyMenu', JSON.stringify(weeklyMenu));
+  }, [weeklyMenu]);
 
   // PWAインストール促進機能
   useEffect(() => {
@@ -717,6 +757,645 @@ function App() {
       delete newTimers[timerId];
       return newTimers;
     });
+  };
+
+  // Shopping List functions
+  const addToShoppingList = (recipe) => {
+    const newItems = recipe.ingredients.map(ingredient => {
+      // Parse ingredient to extract name and quantity
+      const match = ingredient.match(/^(.+?):\s*(.+)$/);
+      const name = match ? match[1] : ingredient;
+      const quantity = match ? match[2] : '';
+      
+      // Determine category
+      const category = getIngredientCategory(name);
+      
+      return {
+        id: `${recipe.id}-${Date.now()}-${Math.random()}`,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        name: name,
+        quantity: quantity,
+        category: category,
+        checked: false,
+        originalText: ingredient
+      };
+    });
+    
+    setShoppingList(prev => {
+      // Merge similar items
+      const merged = [...prev];
+      
+      newItems.forEach(newItem => {
+        const existingIndex = merged.findIndex(item => 
+          item.name === newItem.name && !item.checked
+        );
+        
+        if (existingIndex >= 0) {
+          // Try to merge quantities
+          const existing = merged[existingIndex];
+          const mergedQuantity = mergeQuantities(existing.quantity, newItem.quantity);
+          merged[existingIndex] = {
+            ...existing,
+            quantity: mergedQuantity,
+            recipeName: `${existing.recipeName}, ${newItem.recipeName}`
+          };
+        } else {
+          merged.push(newItem);
+        }
+      });
+      
+      return merged;
+    });
+    
+    setNotification(`${recipe.name}の材料を買い物リストに追加しました`);
+    setTimeout(() => setNotification(null), 2000);
+  };
+  
+  const getIngredientCategory = (ingredient) => {
+    const categories = {
+      '肉類': ['肉', '鶏', '豚', '牛', 'ベーコン', 'ハム', 'ソーセージ'],
+      '野菜': ['野菜', 'トマト', 'キャベツ', '玉ねぎ', 'にんじん', 'じゃがいも', 'ピーマン', 'なす', 'きゅうり', 'レタス', '白菜', '大根', 'ねぎ', 'ほうれん草', 'ブロッコリー'],
+      '調味料': ['醤油', '味噌', '塩', '砂糖', '酢', '油', 'ソース', 'マヨネーズ', 'ケチャップ', 'みりん', '酒', 'だし', 'スパイス', '胡椒'],
+      'その他': []
+    };
+    
+    const lowerIngredient = ingredient.toLowerCase();
+    
+    for (const [category, keywords] of Object.entries(categories)) {
+      if (keywords.some(keyword => lowerIngredient.includes(keyword))) {
+        return category;
+      }
+    }
+    
+    return 'その他';
+  };
+  
+  const mergeQuantities = (qty1, qty2) => {
+    // Simple implementation - can be enhanced with unit parsing
+    const num1 = parseFloat(qty1) || 0;
+    const num2 = parseFloat(qty2) || 0;
+    
+    if (num1 && num2) {
+      const unit = qty1.replace(/[\d.]+/, '').trim() || qty2.replace(/[\d.]+/, '').trim();
+      return `${num1 + num2}${unit}`;
+    }
+    
+    return `${qty1}, ${qty2}`;
+  };
+  
+  const toggleShoppingItem = (itemId) => {
+    setShoppingList(prev => prev.map(item =>
+      item.id === itemId ? { ...item, checked: !item.checked } : item
+    ));
+  };
+  
+  const updateShoppingItemQuantity = (itemId, newQuantity) => {
+    setShoppingList(prev => prev.map(item =>
+      item.id === itemId ? { ...item, quantity: newQuantity } : item
+    ));
+    setEditingShoppingItem(null);
+  };
+  
+  const deleteShoppingItem = (itemId) => {
+    setShoppingList(prev => prev.filter(item => item.id !== itemId));
+  };
+  
+  const addCustomShoppingItem = (name, quantity, category) => {
+    const newItem = {
+      id: `custom-${Date.now()}-${Math.random()}`,
+      name: name,
+      quantity: quantity,
+      category: category || 'その他',
+      checked: false,
+      isCustom: true
+    };
+    
+    setShoppingList(prev => [...prev, newItem]);
+  };
+  
+  const clearShoppingList = () => {
+    const checkedItems = shoppingList.filter(item => item.checked);
+    if (checkedItems.length === 0) {
+      setNotification('チェック済みの項目がありません');
+      setTimeout(() => setNotification(null), 2000);
+      return;
+    }
+    
+    if (window.confirm(`チェック済みの${checkedItems.length}件を削除しますか？`)) {
+      setShoppingList(prev => prev.filter(item => !item.checked));
+      setNotification(`${checkedItems.length}件の項目を削除しました`);
+      setTimeout(() => setNotification(null), 2000);
+    }
+  };
+  
+  const clearAllShoppingList = () => {
+    if (window.confirm('買い物リストを全てクリアしますか？')) {
+      setShoppingList([]);
+      setNotification('買い物リストをクリアしました');
+      setTimeout(() => setNotification(null), 2000);
+    }
+  };
+  
+  const shareShoppingList = () => {
+    const groupedItems = {};
+    shoppingList.forEach(item => {
+      if (!groupedItems[item.category]) {
+        groupedItems[item.category] = [];
+      }
+      groupedItems[item.category].push(item);
+    });
+    
+    let text = '📝 買い物リスト\n\n';
+    
+    Object.entries(groupedItems).forEach(([category, items]) => {
+      text += `【${category}】\n`;
+      items.forEach(item => {
+        const checkmark = item.checked ? '✓' : '□';
+        text += `${checkmark} ${item.name} ${item.quantity}\n`;
+      });
+      text += '\n';
+    });
+    
+    text += `作成: ${new Date().toLocaleDateString('ja-JP')}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: '買い物リスト',
+        text: text
+      }).catch(err => console.log('Error sharing:', err));
+    } else {
+      // Fallback - copy to clipboard
+      navigator.clipboard.writeText(text).then(() => {
+        setNotification('買い物リストをコピーしました');
+        setTimeout(() => setNotification(null), 2000);
+      });
+    }
+  };
+  
+  const toggleAllShoppingItems = (checked) => {
+    setShoppingList(prev => prev.map(item => ({ ...item, checked })));
+  };
+
+  // Weekly Menu Functions
+  const generateWeeklyMenu = () => {
+    const newMenu = [];
+    
+    console.log('Total recipes available:', allRecipes.length);
+    
+    // レシピをカテゴリ別に分類（より寛容な条件）
+    const categorizedRecipes = {
+      japanese: allRecipes.filter(recipe => {
+        const name = (recipe.name || recipe.strMeal || '').toLowerCase();
+        const area = (recipe.strArea || '').toLowerCase();
+        return name.includes('味噌') || name.includes('醤油') || 
+               name.includes('和風') || name.includes('だし') ||
+               name.includes('照り') || name.includes('煮物') ||
+               recipe.category === '和食' || area === 'japanese';
+      }),
+      western: allRecipes.filter(recipe => {
+        const name = (recipe.name || recipe.strMeal || '').toLowerCase();
+        const area = (recipe.strArea || '').toLowerCase();
+        return name.includes('パスタ') || name.includes('グラタン') ||
+               name.includes('ステーキ') || name.includes('オムライス') ||
+               name.includes('ハンバーグ') || recipe.category === '洋食' ||
+               area === 'italian' || area === 'french' || area === 'american';
+      }),
+      chinese: allRecipes.filter(recipe => {
+        const name = (recipe.name || recipe.strMeal || '').toLowerCase();
+        const area = (recipe.strArea || '').toLowerCase();
+        return name.includes('炒め') || name.includes('麻婆') ||
+               name.includes('中華') || name.includes('酢豚') ||
+               recipe.category === '中華' || area === 'chinese';
+      }),
+      light: allRecipes.filter(recipe => {
+        const name = (recipe.name || recipe.strMeal || '').toLowerCase();
+        return name.includes('サラダ') || name.includes('スープ') ||
+               name.includes('蒸し') || recipe.difficulty === '簡単';
+      })
+    };
+    
+    console.log('Categorized recipes:', {
+      japanese: categorizedRecipes.japanese.length,
+      western: categorizedRecipes.western.length,
+      chinese: categorizedRecipes.chinese.length,
+      light: categorizedRecipes.light.length
+    });
+    
+    // バランスの良い組み合わせパターン
+    const weekPattern = ['japanese', 'western', 'chinese', 'light', 'japanese', 'western', 'chinese'];
+    const usedRecipes = new Set();
+    
+    for (let i = 0; i < 7; i++) {
+      const categoryType = weekPattern[i];
+      let availableRecipes = categorizedRecipes[categoryType];
+      
+      // カテゴリにレシピがない場合は全レシピから選択
+      if (!availableRecipes || availableRecipes.length === 0) {
+        availableRecipes = allRecipes;
+        console.log(`No recipes found for category ${categoryType}, using all recipes`);
+      }
+      
+      // 未使用のレシピから選択
+      const unusedRecipes = availableRecipes.filter(recipe => !usedRecipes.has(recipe.id || recipe.idMeal));
+      const recipesToChooseFrom = unusedRecipes.length > 0 ? unusedRecipes : availableRecipes;
+      
+      console.log(`Day ${i + 1} (${categoryType}): ${recipesToChooseFrom.length} recipes available`);
+      
+      // ランダムに選択
+      const selectedRecipe = recipesToChooseFrom.length > 0 ? 
+        recipesToChooseFrom[Math.floor(Math.random() * recipesToChooseFrom.length)] : null;
+      
+      if (selectedRecipe) {
+        usedRecipes.add(selectedRecipe.id || selectedRecipe.idMeal);
+        newMenu.push(selectedRecipe);
+        console.log(`Selected: ${selectedRecipe.name || selectedRecipe.strMeal}`);
+      } else {
+        newMenu.push(null);
+        console.log('No recipe selected for day', i + 1);
+      }
+    }
+    
+    console.log('Generated menu:', newMenu);
+    console.log('Menu length:', newMenu.length);
+    
+    setWeeklyMenu(newMenu);
+    localStorage.setItem('weeklyMenu', JSON.stringify(newMenu));
+    
+    if (newMenu.length > 0) {
+      setNotification('今週の献立を生成しました！');
+    } else {
+      setNotification('献立の生成に失敗しました。レシピデータを確認してください。');
+    }
+    setTimeout(() => setNotification(null), 3000);
+  };
+  
+  const selectBalancedRecipe = (recipes, usedRecipes) => {
+    // 栄養バランスを考慮したレシピ選択
+    const scoredRecipes = recipes.map(recipe => {
+      let score = Math.random() * 10; // ベーススコア
+      
+      // 栄養価で加点
+      const nutrition = calculateNutrition(recipe);
+      if (nutrition.protein > 15) score += 2; // 高タンパク
+      if (nutrition.calories < 500) score += 1; // 適度なカロリー
+      if (nutrition.fiber > 3) score += 1; // 食物繊維豊富
+      
+      // 調理時間で加点（平日は短時間優先）
+      if (recipe.cookingTime && recipe.cookingTime.includes('15分')) score += 1;
+      if (recipe.cookingTime && recipe.cookingTime.includes('30分')) score += 0.5;
+      
+      return { recipe, score };
+    });
+    
+    // スコアが高い順にソートして上位から選択
+    scoredRecipes.sort((a, b) => b.score - a.score);
+    return scoredRecipes[0]?.recipe || recipes[0];
+  };
+  
+  const getDateForDay = (weekStart, dayIndex) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + dayIndex);
+    return date.toISOString().split('T')[0];
+  };
+  
+  const updateMenuRecipe = (dayKey, mealType, newRecipe) => {
+    setWeeklyMenu(prev => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [mealType]: newRecipe
+      }
+    }));
+  };
+  
+  const toggleMealCompleted = (dayKey, mealType) => {
+    setWeeklyMenu(prev => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [`${mealType}Completed`]: !prev[dayKey]?.[`${mealType}Completed`]
+      }
+    }));
+  };
+  
+  const skipMeal = (dayKey, mealType) => {
+    setWeeklyMenu(prev => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [mealType]: null,
+        [`${mealType}Skipped`]: true
+      }
+    }));
+  };
+  
+  const generateWeeklyShoppingList = () => {
+    try {
+      console.log('Weekly menu:', weeklyMenu);
+      const weeklyRecipes = [];
+      
+      weeklyMenu.forEach(recipe => {
+        if (recipe && recipe !== null) {
+          weeklyRecipes.push(recipe);
+        }
+      });
+      
+      console.log('Weekly recipes for shopping:', weeklyRecipes);
+      
+      // 重複する材料をまとめる
+      const consolidatedIngredients = {};
+      
+      weeklyRecipes.forEach(recipe => {
+        const ingredients = recipe.ingredients || [];
+        const recipeName = recipe.name || recipe.strMeal || '';
+        
+        console.log(`Processing recipe: ${recipeName}, ingredients:`, ingredients);
+        
+        ingredients.forEach(ingredient => {
+          let name, quantity;
+          
+          // Handle different ingredient formats
+          if (typeof ingredient === 'string') {
+            // 材料の形式: "材料名 分量" または "材料名: 分量"
+            const colonMatch = ingredient.match(/^(.+?):\s*(.+)$/);
+            const spaceMatch = ingredient.match(/^(.+?)\s+([0-9]+.*|適量|少々|お好み.*|ひとつまみ.*)$/);
+            
+            if (colonMatch) {
+              name = colonMatch[1].trim();
+              quantity = colonMatch[2].trim();
+            } else if (spaceMatch) {
+              name = spaceMatch[1].trim();
+              quantity = spaceMatch[2].trim();
+            } else {
+              name = ingredient.trim();
+              quantity = '適量';
+            }
+          } else {
+            name = ingredient.name || ingredient;
+            quantity = ingredient.quantity || '適量';
+          }
+          
+          // 空の名前をスキップ
+          if (!name || name.trim() === '') return;
+          
+          if (consolidatedIngredients[name]) {
+            // 既存の材料と合算
+            const existingQty = consolidatedIngredients[name].quantity;
+            const mergedQty = mergeQuantities(existingQty, quantity);
+            consolidatedIngredients[name].quantity = mergedQty;
+            consolidatedIngredients[name].recipes.push(recipeName);
+          } else {
+            consolidatedIngredients[name] = {
+              quantity: quantity,
+              category: getIngredientCategory(name),
+              recipes: [recipeName]
+            };
+          }
+        });
+      });
+      
+      console.log('Consolidated ingredients:', consolidatedIngredients);
+    
+      // 買い物リストに追加
+      const newShoppingItems = Object.entries(consolidatedIngredients).map(([name, data]) => ({
+        id: `weekly-${Date.now()}-${Math.random()}`,
+        name: name,
+        quantity: data.quantity,
+        category: data.category,
+        checked: false,
+        recipeName: data.recipes.join(', '),
+        isWeeklyMenu: true
+      }));
+      
+      console.log('Generated shopping items:', newShoppingItems);
+      return newShoppingItems;
+      
+    } catch (error) {
+      console.error('Error generating weekly shopping list:', error);
+      return [];
+    }
+  };
+  
+  const getWeekDateRange = (weekStart) => {
+    if (!weekStart) return '';
+    
+    const start = new Date(weekStart);
+    const end = new Date(weekStart);
+    end.setDate(start.getDate() + 6);
+    
+    const formatDate = (date) => {
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    };
+    
+    return `${formatDate(start)} - ${formatDate(end)}`;
+  };
+
+  // Nutrition Database and Functions
+  const nutritionDatabase = {
+    // 基本食材の栄養価（100gあたり）
+    '鶏むね肉': { calories: 108, protein: 22.3, fat: 1.5, carbs: 0, fiber: 0, salt: 0.2 },
+    '鶏もも肉': { calories: 200, protein: 16.2, fat: 14.0, carbs: 0, fiber: 0, salt: 0.2 },
+    '鶏肉': { calories: 154, protein: 19.25, fat: 7.75, carbs: 0, fiber: 0, salt: 0.2 },
+    '豚肉': { calories: 263, protein: 17.1, fat: 21.1, carbs: 0.2, fiber: 0, salt: 0.2 },
+    '豚バラ肉': { calories: 386, protein: 14.2, fat: 34.6, carbs: 0.1, fiber: 0, salt: 0.2 },
+    '牛肉': { calories: 250, protein: 17.4, fat: 19.5, carbs: 0.3, fiber: 0, salt: 0.2 },
+    'ひき肉': { calories: 221, protein: 19.0, fat: 15.1, carbs: 0.3, fiber: 0, salt: 0.2 },
+    '卵': { calories: 151, protein: 12.3, fat: 10.3, carbs: 0.3, fiber: 0, salt: 0.4 },
+    
+    // 野菜類
+    '玉ねぎ': { calories: 37, protein: 1.0, fat: 0.1, carbs: 8.8, fiber: 1.6, salt: 0.002 },
+    'にんじん': { calories: 39, protein: 0.6, fat: 0.1, carbs: 9.3, fiber: 2.8, salt: 0.028 },
+    'じゃがいも': { calories: 76, protein: 1.6, fat: 0.1, carbs: 17.6, fiber: 1.3, salt: 0.001 },
+    'トマト': { calories: 19, protein: 0.7, fat: 0.1, carbs: 3.7, fiber: 1.0, salt: 0.003 },
+    'キャベツ': { calories: 23, protein: 1.3, fat: 0.2, carbs: 5.2, fiber: 1.8, salt: 0.005 },
+    'ピーマン': { calories: 22, protein: 0.9, fat: 0.2, carbs: 5.1, fiber: 2.3, salt: 0.001 },
+    'なす': { calories: 22, protein: 1.1, fat: 0.1, carbs: 5.1, fiber: 2.2, salt: 0.001 },
+    'ブロッコリー': { calories: 33, protein: 4.3, fat: 0.5, carbs: 5.2, fiber: 4.4, salt: 0.020 },
+    'ほうれん草': { calories: 20, protein: 2.2, fat: 0.4, carbs: 3.1, fiber: 2.8, salt: 0.016 },
+    'もやし': { calories: 14, protein: 1.4, fat: 0.1, carbs: 2.6, fiber: 1.3, salt: 0.006 },
+    
+    // 炭水化物
+    '米': { calories: 358, protein: 6.1, fat: 0.9, carbs: 77.6, fiber: 0.5, salt: 0.001 },
+    '白米': { calories: 358, protein: 6.1, fat: 0.9, carbs: 77.6, fiber: 0.5, salt: 0.001 },
+    'パン': { calories: 264, protein: 9.3, fat: 4.4, carbs: 46.7, fiber: 2.3, salt: 1.3 },
+    'パスタ': { calories: 378, protein: 13.0, fat: 1.5, carbs: 72.2, fiber: 2.9, salt: 0.006 },
+    'うどん': { calories: 270, protein: 6.8, fat: 1.0, carbs: 56.8, fiber: 1.7, salt: 2.8 },
+    'そば': { calories: 274, protein: 9.6, fat: 1.5, carbs: 54.5, fiber: 3.7, salt: 0.1 },
+    
+    // 調味料・油脂類
+    '醤油': { calories: 71, protein: 10.9, fat: 0.1, carbs: 7.8, fiber: 0, salt: 14.5 },
+    '味噌': { calories: 192, protein: 12.9, fat: 5.7, carbs: 18.0, fiber: 4.1, salt: 10.7 },
+    '砂糖': { calories: 384, protein: 0, fat: 0, carbs: 99.2, fiber: 0, salt: 0 },
+    '油': { calories: 921, protein: 0, fat: 100, carbs: 0.1, fiber: 0, salt: 0 },
+    'オリーブオイル': { calories: 921, protein: 0, fat: 100, carbs: 0, fiber: 0, salt: 0 },
+    'バター': { calories: 745, protein: 0.6, fat: 81.0, carbs: 0.2, fiber: 0, salt: 1.4 },
+    '塩': { calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 0, salt: 99.5 },
+    
+    // その他
+    '牛乳': { calories: 67, protein: 3.3, fat: 3.8, carbs: 4.8, fiber: 0, salt: 0.1 },
+    'チーズ': { calories: 339, protein: 25.7, fat: 26.0, carbs: 1.3, fiber: 0, salt: 2.8 },
+    '豆腐': { calories: 72, protein: 6.6, fat: 4.2, carbs: 1.6, fiber: 0.4, salt: 0.01 },
+    '納豆': { calories: 200, protein: 16.5, fat: 10.0, carbs: 12.1, fiber: 6.7, salt: 0.6 }
+  };
+  
+  // 推奨摂取量（成人1日分）
+  const dailyRecommendedIntake = {
+    calories: 2000,  // kcal
+    protein: 60,     // g
+    fat: 55,         // g
+    carbs: 300,      // g
+    fiber: 20,       // g
+    salt: 7.5        // g
+  };
+  
+  const parseIngredientAmount = (ingredient) => {
+    // 日本語の材料文字列から数量を抽出
+    const patterns = [
+      /(\d+(?:\.\d+)?)\s*g/,           // グラム
+      /(\d+(?:\.\d+)?)\s*ml/,          // ミリリットル
+      /(\d+(?:\.\d+)?)\s*個/,          // 個数
+      /(\d+(?:\.\d+)?)\s*本/,          // 本数
+      /(\d+(?:\.\d+)?)\s*枚/,          // 枚数
+      /(\d+(?:\.\d+)?)\s*片/,          // 片
+      /(\d+(?:\.\d+)?)\s*丁/,          // 丁
+      /(\d+(?:\.\d+)?)\s*膳分/,        // 膳分
+      /(\d+(?:\.\d+)?)\s*人分/,        // 人分
+      /(\d+(?:\.\d+)?)\s*(大さじ|小さじ)/, // 大さじ・小さじ
+      /(\d+(?:\.\d+)?)\s*カップ/,      // カップ
+      /(\d+(?:\.\d+)?)\s*つ/,          // つ
+      /(\d+(?:\.\d+)?)\s*箱/,          // 箱
+      /(\d+(?:\.\d+)?)(?:\s|$)/        // 数字のみ（デフォルト）
+    ];
+    
+    for (const pattern of patterns) {
+      const match = ingredient.match(pattern);
+      if (match) {
+        return parseFloat(match[1]);
+      }
+    }
+    
+    return 100; // デフォルト値
+  };
+  
+  const getIngredientBaseForm = (ingredient) => {
+    // 材料名から基本形を抽出（栄養価データベースのキーと照合）
+    const ingredientLower = ingredient.toLowerCase();
+    
+    // データベースのキーと部分一致検索
+    for (const key of Object.keys(nutritionDatabase)) {
+      if (ingredientLower.includes(key.toLowerCase()) || 
+          key.toLowerCase().includes(ingredientLower.split(/\s+/)[0])) {
+        return key;
+      }
+    }
+    
+    // より柔軟なマッチング
+    const matchingPatterns = {
+      '鶏': '鶏肉',
+      '豚': '豚肉', 
+      '牛': '牛肉',
+      '卵': '卵',
+      '玉ねぎ': '玉ねぎ',
+      'にんじん': 'にんじん',
+      'じゃがいも': 'じゃがいも',
+      'トマト': 'トマト',
+      'キャベツ': 'キャベツ',
+      'ピーマン': 'ピーマン',
+      'なす': 'なす',
+      '米': '白米',
+      'ご飯': '白米',
+      'パン': 'パン',
+      'パスタ': 'パスタ',
+      '醤油': '醤油',
+      '味噌': '味噌',
+      '砂糖': '砂糖',
+      '油': '油',
+      '塩': '塩',
+      '牛乳': '牛乳',
+      'チーズ': 'チーズ',
+      '豆腐': '豆腐'
+    };
+    
+    for (const [pattern, baseForm] of Object.entries(matchingPatterns)) {
+      if (ingredientLower.includes(pattern)) {
+        return baseForm;
+      }
+    }
+    
+    return null; // マッチしない場合
+  };
+  
+  const calculateNutrition = (recipe, servings = null) => {
+    const targetServings = servings || recipe.servings;
+    const adjustedIngredients = getAdjustedIngredients(recipe);
+    
+    let totalNutrition = {
+      calories: 0,
+      protein: 0,
+      fat: 0,
+      carbs: 0,
+      fiber: 0,
+      salt: 0
+    };
+    
+    adjustedIngredients.forEach(ingredient => {
+      const amount = parseIngredientAmount(ingredient);
+      const baseForm = getIngredientBaseForm(ingredient);
+      
+      if (baseForm && nutritionDatabase[baseForm]) {
+        const nutritionPer100g = nutritionDatabase[baseForm];
+        const multiplier = amount / 100; // 100gあたりの栄養価なので
+        
+        totalNutrition.calories += nutritionPer100g.calories * multiplier;
+        totalNutrition.protein += nutritionPer100g.protein * multiplier;
+        totalNutrition.fat += nutritionPer100g.fat * multiplier;
+        totalNutrition.carbs += nutritionPer100g.carbs * multiplier;
+        totalNutrition.fiber += nutritionPer100g.fiber * multiplier;
+        totalNutrition.salt += nutritionPer100g.salt * multiplier;
+      }
+    });
+    
+    // 1人分に換算
+    const perServingNutrition = {
+      calories: Math.round(totalNutrition.calories / targetServings),
+      protein: Math.round(totalNutrition.protein * 10 / targetServings) / 10,
+      fat: Math.round(totalNutrition.fat * 10 / targetServings) / 10,
+      carbs: Math.round(totalNutrition.carbs * 10 / targetServings) / 10,
+      fiber: Math.round(totalNutrition.fiber * 10 / targetServings) / 10,
+      salt: Math.round(totalNutrition.salt * 100 / targetServings) / 100
+    };
+    
+    return perServingNutrition;
+  };
+  
+  const getNutritionBadges = (nutrition) => {
+    const badges = [];
+    
+    // カロリー基準
+    if (nutrition.calories < 300) badges.push({ text: '低カロリー', color: '#4CAF50' });
+    else if (nutrition.calories > 600) badges.push({ text: '高カロリー', color: '#FF5722' });
+    
+    // タンパク質基準
+    if (nutrition.protein > 20) badges.push({ text: '高タンパク', color: '#2196F3' });
+    
+    // 脂質基準
+    if (nutrition.fat < 10) badges.push({ text: '低脂質', color: '#8BC34A' });
+    else if (nutrition.fat > 25) badges.push({ text: '高脂質', color: '#FF9800' });
+    
+    // 食物繊維基準
+    if (nutrition.fiber > 5) badges.push({ text: '食物繊維豊富', color: '#795548' });
+    
+    // 塩分基準
+    if (nutrition.salt < 1.5) badges.push({ text: '減塩', color: '#607D8B' });
+    else if (nutrition.salt > 3) badges.push({ text: '塩分注意', color: '#F44336' });
+    
+    // ヘルシー判定
+    if (nutrition.calories < 400 && nutrition.protein > 15 && nutrition.fat < 15 && nutrition.salt < 2) {
+      badges.push({ text: 'ヘルシー', color: '#4CAF50' });
+    }
+    
+    return badges;
   };
 
   
@@ -1901,6 +2580,200 @@ function App() {
     </div>
   );
 
+  const renderShoppingList = () => {
+    // Group items by category
+    const groupedItems = {};
+    shoppingList.forEach(item => {
+      if (!groupedItems[item.category]) {
+        groupedItems[item.category] = [];
+      }
+      groupedItems[item.category].push(item);
+    });
+    
+    // Sort items within each category - unchecked first
+    Object.keys(groupedItems).forEach(category => {
+      groupedItems[category].sort((a, b) => {
+        if (a.checked === b.checked) return 0;
+        return a.checked ? 1 : -1;
+      });
+    });
+    
+    const allChecked = shoppingList.length > 0 && shoppingList.every(item => item.checked);
+    const someChecked = shoppingList.some(item => item.checked);
+    
+    return (
+      <div className="shopping-list-content">
+        <div className="shopping-list-header">
+          <h2>買い物リスト</h2>
+          <div className="shopping-list-actions">
+            <button 
+              className="action-btn"
+              onClick={() => toggleAllShoppingItems(!allChecked)}
+              disabled={shoppingList.length === 0}
+              title={allChecked ? '全て解除' : '全て選択'}
+            >
+              {allChecked ? '解除' : '選択'}
+            </button>
+            <button 
+              className="action-btn share-btn"
+              onClick={shareShoppingList}
+              disabled={shoppingList.length === 0}
+              title="リストを共有"
+            >
+              共有
+            </button>
+            <button 
+              className="action-btn clear-btn"
+              onClick={clearShoppingList}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (shoppingList.length > 0) {
+                  clearAllShoppingList();
+                }
+              }}
+              disabled={shoppingList.filter(item => item.checked).length === 0}
+              title="チェック済みを削除（長押しで全削除）"
+            >
+              削除
+            </button>
+          </div>
+        </div>
+        
+        {shoppingList.length === 0 ? (
+          <div className="empty-shopping-list">
+            <p>買い物リストは空です</p>
+            <p className="hint">レシピから材料を追加してください</p>
+          </div>
+        ) : (
+          <div className="shopping-categories">
+            {Object.entries(groupedItems).map(([category, items]) => (
+              <div key={category} className="shopping-category">
+                <h3 className="category-header">{category}</h3>
+                <div className="shopping-items">
+                  {items.map(item => (
+                    <div 
+                      key={item.id} 
+                      className={`shopping-item ${item.checked ? 'checked' : ''}`}
+                    >
+                      <label className="item-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={() => toggleShoppingItem(item.id)}
+                        />
+                        <span className="checkmark"></span>
+                      </label>
+                      <div className="item-details">
+                        <span className="item-name">{item.name}</span>
+                        {editingShoppingItem === item.id ? (
+                          <input
+                            type="text"
+                            className="quantity-edit"
+                            value={item.quantity}
+                            onChange={(e) => updateShoppingItemQuantity(item.id, e.target.value)}
+                            onBlur={() => setEditingShoppingItem(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setEditingShoppingItem(null);
+                              }
+                            }}
+                            autoFocus
+                          />
+                        ) : (
+                          <span 
+                            className="item-quantity"
+                            onClick={() => setEditingShoppingItem(item.id)}
+                          >
+                            {item.quantity}
+                          </span>
+                        )}
+                        {item.recipeName && (
+                          <span className="item-source">({item.recipeName})</span>
+                        )}
+                      </div>
+                      {!item.checked && (
+                        <button
+                          className="delete-btn"
+                          onClick={() => deleteShoppingItem(item.id)}
+                          title="削除"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <div className="add-item-section">
+          {!showAddForm ? (
+            <button 
+              className="add-item-btn"
+              onClick={() => setShowAddForm(true)}
+            >
+              + 材料を追加
+            </button>
+          ) : (
+            <div className="add-item-form">
+              <input
+                type="text"
+                placeholder="材料名"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                className="add-item-input"
+              />
+              <input
+                type="text"
+                placeholder="数量"
+                value={newItemQuantity}
+                onChange={(e) => setNewItemQuantity(e.target.value)}
+                className="add-item-input quantity"
+              />
+              <select
+                value={newItemCategory}
+                onChange={(e) => setNewItemCategory(e.target.value)}
+                className="category-select"
+              >
+                <option value="肉類">肉類</option>
+                <option value="野菜">野菜</option>
+                <option value="調味料">調味料</option>
+                <option value="その他">その他</option>
+              </select>
+              <button
+                className="confirm-add-btn"
+                onClick={() => {
+                  if (newItemName.trim()) {
+                    addCustomShoppingItem(newItemName, newItemQuantity, newItemCategory);
+                    setNewItemName('');
+                    setNewItemQuantity('');
+                    setNewItemCategory('その他');
+                    setShowAddForm(false);
+                  }
+                }}
+              >
+                追加
+              </button>
+              <button
+                className="cancel-add-btn"
+                onClick={() => {
+                  setShowAddForm(false);
+                  setNewItemName('');
+                  setNewItemQuantity('');
+                  setNewItemCategory('その他');
+                }}
+              >
+                キャンセル
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderTabBar = () => {
     if (openRecipes.length === 0) return null;
     
@@ -1955,24 +2828,54 @@ function App() {
       <div className="App mobile-app">
         <div className="recipe-detail-fullscreen">
           {renderTabBar()}
-          <div className="recipe-header">
-            <button 
-              className={`bookmark-btn ${bookmarks.includes(selectedRecipe.id) ? 'bookmarked' : ''}`}
-              onClick={() => toggleBookmark(selectedRecipe.id)}
-            >
-              ♡
-            </button>
-            <button 
-              className={`cooking-mode-btn ${cookingMode ? 'active' : ''}`}
-              onClick={toggleCookingMode}
-            >
-              👨‍🍳 {cookingMode ? '調理中' : '調理開始'}
-            </button>
-          </div>
           
+          {/* 料理写真とヘッダー情報 */}
+          <div className="recipe-hero-new">
+            <div className="recipe-image-container">
+              <LazyImage src={selectedRecipe.image} alt={selectedRecipe.name} />
+              <div className="recipe-overlay">
+                <button 
+                  className={`bookmark-fab ${bookmarks.includes(selectedRecipe.id) ? 'bookmarked' : ''}`}
+                  onClick={() => toggleBookmark(selectedRecipe.id)}
+                >
+                  ♡
+                </button>
+                <div className="recipe-title-overlay">
+                  <h1>{selectedRecipe.name}</h1>
+                  <div className="recipe-meta">
+                    <span className="time">⏰ {selectedRecipe.cookingTime}</span>
+                    <span className="difficulty">{selectedRecipe.difficulty}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 人数選択 */}
+          <div className="servings-section-new">
+            <div className="servings-selector-new">
+              <span className="servings-label">人数を選択</span>
+              <div className="servings-buttons-new">
+                {[1, 2, 3, 4].map(num => (
+                  <button
+                    key={num}
+                    className={`serving-btn-new ${(selectedServings[selectedRecipe.id] || selectedRecipe.servings) === num ? 'active' : ''}`}
+                    onClick={() => setSelectedServings(prev => ({
+                      ...prev,
+                      [selectedRecipe.id]: num
+                    }))}
+                  >
+                    {num}人
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 調理モードプログレス */}
           {cookingMode && (
-            <div className="cooking-progress-bar">
-              <div className="progress-header">
+            <div className="cooking-progress-new">
+              <div className="progress-info">
                 <span>ステップ {currentStep + 1} / {selectedRecipe.instructions.length}</span>
                 <div className="step-controls">
                   <button 
@@ -2000,227 +2903,392 @@ function App() {
             </div>
           )}
 
-          <div className="recipe-hero">
-            <LazyImage src={selectedRecipe.image} alt={selectedRecipe.name} />
-            <div className="recipe-hero-content">
-              <h1>{selectedRecipe.name}</h1>
-              <p>{selectedRecipe.description}</p>
-              <div className="recipe-stats">
-                <span className="time">⏰ {selectedRecipe.cookingTime}</span>
-                <span className="difficulty">{selectedRecipe.difficulty}</span>
-              </div>
-            </div>
+          {/* タブナビゲーション */}
+          <div className="recipe-tabs">
+            <button
+              className={`tab-btn ${activeRecipeTab === 'recipe' ? 'active' : ''}`}
+              onClick={() => setActiveRecipeTab('recipe')}
+            >
+              レシピ
+            </button>
+            <button
+              className={`tab-btn ${activeRecipeTab === 'nutrition' ? 'active' : ''}`}
+              onClick={() => setActiveRecipeTab('nutrition')}
+            >
+              栄養価
+            </button>
+            <button
+              className={`tab-btn ${activeRecipeTab === 'advice' ? 'active' : ''}`}
+              onClick={() => setActiveRecipeTab('advice')}
+            >
+              アドバイス
+            </button>
           </div>
 
-          <div className="recipe-content">
-            <div className="ingredients-section">
-              <div className="servings-selector">
-                <span className="servings-label">人数：</span>
-                <div className="servings-buttons">
-                  {[1, 2, 3, 4].map(num => (
-                    <button
-                      key={num}
-                      className={`serving-btn ${(selectedServings[selectedRecipe.id] || selectedRecipe.servings) === num ? 'active' : ''}`}
-                      onClick={() => setSelectedServings(prev => ({
-                        ...prev,
-                        [selectedRecipe.id]: num
-                      }))}
-                    >
-                      {num}人分
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="ingredients-header">
-                <h3>材料</h3>
-                <div className="ingredients-progress">
-                  <span className="progress-text">
-                    {getCheckedCount(selectedRecipe.id, selectedRecipe.ingredients.length)}/
-                    {selectedRecipe.ingredients.length} 完了
-                  </span>
-                  <div className="ingredients-controls">
+          {/* タブコンテンツ */}
+          <div className="tab-content">
+            {activeRecipeTab === 'recipe' && (
+              <div className="recipe-tab-content">
+                {/* 材料セクション */}
+                <div className="ingredients-section-new">
+                  <div className="section-header">
+                    <h3>🥬 材料</h3>
+                    <div className="ingredients-actions">
+                      <span className="progress-text">
+                        {getCheckedCount(selectedRecipe.id, selectedRecipe.ingredients.length)}/
+                        {selectedRecipe.ingredients.length}
+                      </span>
+                      <button 
+                        className="add-to-shopping-btn-small"
+                        onClick={() => addToShoppingList(selectedRecipe)}
+                        title="買い物リストに追加"
+                      >
+                        🛒
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="ingredients-controls-new">
                     <button 
-                      className="control-btn"
+                      className="control-btn-small"
                       onClick={() => toggleAllIngredients(selectedRecipe.id, selectedRecipe.ingredients.length, true)}
                     >
-                      全てチェック
+                      全選択
                     </button>
                     <button 
-                      className="control-btn"
+                      className="control-btn-small"
                       onClick={() => toggleAllIngredients(selectedRecipe.id, selectedRecipe.ingredients.length, false)}
                     >
-                      全て解除
+                      全解除
                     </button>
+                  </div>
+                  
+                  <ul className="ingredients-list-new">
+                    {getAdjustedIngredients(selectedRecipe).map((ingredient, index) => {
+                      const key = `${selectedRecipe.id}-${index}`;
+                      const isChecked = checkedIngredients[key] || false;
+                      return (
+                        <li key={index} className="ingredient-item-new">
+                          <label className="ingredient-label-new">
+                            <input
+                              type="checkbox"
+                              className="ingredient-checkbox-new"
+                              checked={isChecked}
+                              onChange={() => toggleIngredient(selectedRecipe.id, index)}
+                            />
+                            <span className="custom-checkbox-new"></span>
+                            <span className={`ingredient-text-new ${isChecked ? 'checked' : ''}`}>
+                              {ingredient}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+                {/* 作り方セクション */}
+                <div className="instructions-section-new">
+                  <h3>👩‍🍳 作り方</h3>
+                  <ol className="instructions-list-new">
+                    {selectedRecipe.instructions.map((step, index) => {
+                      const time = extractTimeFromStep(step);
+                      const timerId = `${selectedRecipe.id}-${index}`;
+                      const timer = timers[timerId];
+                      
+                      return (
+                        <li key={index} className="instruction-step-new">
+                          <div className="step-content">
+                            <span className="step-text-new">{step}</span>
+                            {time && (
+                              <div className="timer-container-new">
+                                {!timer ? (
+                                  <button
+                                    className="timer-btn-new start"
+                                    onClick={() => startTimer(selectedRecipe.id, index, time)}
+                                  >
+                                    ⏱️ {Math.floor(time / 60)}分
+                                  </button>
+                                ) : timer.isCompleted ? (
+                                  <button
+                                    className="timer-btn-new completed"
+                                    onClick={() => stopTimer(selectedRecipe.id, index)}
+                                  >
+                                    ✅ 完了
+                                  </button>
+                                ) : (
+                                  <div className="timer-active-new">
+                                    <span className={`timer-display-new ${timer.remaining <= 10 ? 'warning' : ''}`}>
+                                      {formatTime(timer.remaining)}
+                                    </span>
+                                    <div className="timer-controls">
+                                      {timer.isPaused ? (
+                                        <button
+                                          className="timer-control-btn resume"
+                                          onClick={() => resumeTimer(selectedRecipe.id, index)}
+                                        >
+                                          ▶️
+                                        </button>
+                                      ) : (
+                                        <button
+                                          className="timer-control-btn pause"
+                                          onClick={() => pauseTimer(selectedRecipe.id, index)}
+                                        >
+                                          ⏸️
+                                        </button>
+                                      )}
+                                      <button
+                                        className="timer-control-btn stop"
+                                        onClick={() => stopTimer(selectedRecipe.id, index)}
+                                      >
+                                        ⏹️
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {activeRecipeTab === 'nutrition' && (
+              <div className="nutrition-tab-content">
+                {(() => {
+                  const nutrition = calculateNutrition(selectedRecipe, selectedServings[selectedRecipe.id] || selectedRecipe.servings);
+                  const badges = getNutritionBadges(nutrition);
+                  
+                  return (
+                    <div className="nutrition-content-new">
+                      {/* 栄養価バッジ */}
+                      {badges.length > 0 && (
+                        <div className="nutrition-badges-new">
+                          {badges.map((badge, index) => (
+                            <span
+                              key={index}
+                              className="nutrition-badge-new"
+                              style={{ backgroundColor: badge.color }}
+                            >
+                              {badge.text}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* 栄養価詳細 */}
+                      <div className="nutrition-grid-new">
+                        <div className="nutrition-item-new calories">
+                          <div className="nutrition-header-new">
+                            <span className="nutrition-icon-new">🔥</span>
+                            <span className="nutrition-label-new">カロリー</span>
+                          </div>
+                          <div className="nutrition-value-new">{nutrition.calories} kcal</div>
+                          <div className="nutrition-bar-new">
+                            <div 
+                              className="nutrition-progress-new calories-progress"
+                              style={{width: `${Math.min((nutrition.calories / dailyRecommendedIntake.calories) * 100, 100)}%`}}
+                            ></div>
+                          </div>
+                          <div className="nutrition-percentage-new">
+                            {Math.round((nutrition.calories / dailyRecommendedIntake.calories) * 100)}%
+                          </div>
+                        </div>
+                        
+                        <div className="nutrition-item-new protein">
+                          <div className="nutrition-header-new">
+                            <span className="nutrition-icon-new">💪</span>
+                            <span className="nutrition-label-new">タンパク質</span>
+                          </div>
+                          <div className="nutrition-value-new">{nutrition.protein} g</div>
+                          <div className="nutrition-bar-new">
+                            <div 
+                              className="nutrition-progress-new protein-progress"
+                              style={{width: `${Math.min((nutrition.protein / dailyRecommendedIntake.protein) * 100, 100)}%`}}
+                            ></div>
+                          </div>
+                          <div className="nutrition-percentage-new">
+                            {Math.round((nutrition.protein / dailyRecommendedIntake.protein) * 100)}%
+                          </div>
+                        </div>
+                        
+                        <div className="nutrition-item-new fat">
+                          <div className="nutrition-header-new">
+                            <span className="nutrition-icon-new">🥑</span>
+                            <span className="nutrition-label-new">脂質</span>
+                          </div>
+                          <div className="nutrition-value-new">{nutrition.fat} g</div>
+                          <div className="nutrition-bar-new">
+                            <div 
+                              className="nutrition-progress-new fat-progress"
+                              style={{width: `${Math.min((nutrition.fat / dailyRecommendedIntake.fat) * 100, 100)}%`}}
+                            ></div>
+                          </div>
+                          <div className="nutrition-percentage-new">
+                            {Math.round((nutrition.fat / dailyRecommendedIntake.fat) * 100)}%
+                          </div>
+                        </div>
+                        
+                        <div className="nutrition-item-new carbs">
+                          <div className="nutrition-header-new">
+                            <span className="nutrition-icon-new">🍞</span>
+                            <span className="nutrition-label-new">炭水化物</span>
+                          </div>
+                          <div className="nutrition-value-new">{nutrition.carbs} g</div>
+                          <div className="nutrition-bar-new">
+                            <div 
+                              className="nutrition-progress-new carbs-progress"
+                              style={{width: `${Math.min((nutrition.carbs / dailyRecommendedIntake.carbs) * 100, 100)}%`}}
+                            ></div>
+                          </div>
+                          <div className="nutrition-percentage-new">
+                            {Math.round((nutrition.carbs / dailyRecommendedIntake.carbs) * 100)}%
+                          </div>
+                        </div>
+                        
+                        <div className="nutrition-item-new fiber">
+                          <div className="nutrition-header-new">
+                            <span className="nutrition-icon-new">🌾</span>
+                            <span className="nutrition-label-new">食物繊維</span>
+                          </div>
+                          <div className="nutrition-value-new">{nutrition.fiber} g</div>
+                          <div className="nutrition-bar-new">
+                            <div 
+                              className="nutrition-progress-new fiber-progress"
+                              style={{width: `${Math.min((nutrition.fiber / dailyRecommendedIntake.fiber) * 100, 100)}%`}}
+                            ></div>
+                          </div>
+                          <div className="nutrition-percentage-new">
+                            {Math.round((nutrition.fiber / dailyRecommendedIntake.fiber) * 100)}%
+                          </div>
+                        </div>
+                        
+                        <div className="nutrition-item-new salt">
+                          <div className="nutrition-header-new">
+                            <span className="nutrition-icon-new">🧂</span>
+                            <span className="nutrition-label-new">塩分相当量</span>
+                          </div>
+                          <div className="nutrition-value-new">{nutrition.salt} g</div>
+                          <div className="nutrition-bar-new">
+                            <div 
+                              className="nutrition-progress-new salt-progress"
+                              style={{width: `${Math.min((nutrition.salt / dailyRecommendedIntake.salt) * 100, 100)}%`}}
+                            ></div>
+                          </div>
+                          <div className="nutrition-percentage-new">
+                            {Math.round((nutrition.salt / dailyRecommendedIntake.salt) * 100)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="nutrition-note-new">
+                        <small>※ 推奨摂取量は成人の1日分を基準としています</small>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {activeRecipeTab === 'advice' && (
+              <div className="advice-tab-content">
+                {/* 料理のコツセクション */}
+                {selectedRecipe.tips && selectedRecipe.tips.length > 0 && (
+                  <div className="tips-section-new">
+                    <h3>💡 料理のコツ</h3>
+                    <ul className="tips-list-new">
+                      {selectedRecipe.tips.map((tip, index) => (
+                        <li key={index} className="tip-item-new">
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* 副菜提案セクション */}
+                {selectedRecipe.sideDishes && selectedRecipe.sideDishes.length > 0 && (
+                  <div className="side-dishes-section-new">
+                    <h3>🍱 おすすめの副菜</h3>
+                    <div className="side-dishes-list-new">
+                      {selectedRecipe.sideDishes.map((sideDish, index) => {
+                        const matchingRecipe = allRecipes.find(recipe => 
+                          recipe.name.includes(sideDish) || sideDish.includes(recipe.name)
+                        );
+                        
+                        return (
+                          <div key={index} className="side-dish-item-new">
+                            {matchingRecipe ? (
+                              <button 
+                                className="side-dish-link-new"
+                                onClick={() => openRecipe(matchingRecipe)}
+                              >
+                                {sideDish}
+                                <span className="link-icon-new">→</span>
+                              </button>
+                            ) : (
+                              <span className="side-dish-text-new">{sideDish}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {/* メモセクション */}
+                <div className="memo-section-new">
+                  <div className="memo-header-new">
+                    <h3>📝 メモ</h3>
+                    {memos[selectedRecipe.id] && (
+                      <button 
+                        className="clear-memo-btn-new"
+                        onClick={() => {
+                          if (window.confirm('メモを削除しますか？')) {
+                            clearMemo(selectedRecipe.id);
+                          }
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
+                  <div className="memo-container-new">
+                    <textarea
+                      className="memo-textarea-new"
+                      placeholder="このレシピのメモを入力...（例：次は塩少なめ）"
+                      value={memos[selectedRecipe.id] || ''}
+                      onChange={(e) => {
+                        const text = e.target.value;
+                        if (text.length <= 200) {
+                          updateMemo(selectedRecipe.id, text);
+                        }
+                      }}
+                      maxLength={200}
+                      rows={4}
+                    />
+                    <div className="memo-counter-new">
+                      {(memos[selectedRecipe.id] || '').length}/200
+                    </div>
                   </div>
                 </div>
               </div>
-              <ul className="ingredients-list">
-                {getAdjustedIngredients(selectedRecipe).map((ingredient, index) => {
-                  const key = `${selectedRecipe.id}-${index}`;
-                  const isChecked = checkedIngredients[key] || false;
-                  return (
-                    <li key={index} className="ingredient-item">
-                      <label className="ingredient-label">
-                        <input
-                          type="checkbox"
-                          className="ingredient-checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleIngredient(selectedRecipe.id, index)}
-                        />
-                        <span className="custom-checkbox"></span>
-                        <span className={`ingredient-text ${isChecked ? 'checked' : ''}`}>
-                          {ingredient}
-                        </span>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            {/* 料理のコツセクション */}
-            {selectedRecipe.tips && selectedRecipe.tips.length > 0 && (
-              <div className="tips-section">
-                <h3>💡 料理のコツ</h3>
-                <ul className="tips-list">
-                  {selectedRecipe.tips.map((tip, index) => (
-                    <li key={index} className="tip-item">
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             )}
-            
-            <div className="instructions-section">
-              <h3>作り方</h3>
-              <ol>
-                {selectedRecipe.instructions.map((step, index) => {
-                  const time = extractTimeFromStep(step);
-                  const timerId = `${selectedRecipe.id}-${index}`;
-                  const timer = timers[timerId];
-                  
-                  return (
-                    <li key={index} className="instruction-step">
-                      <span className="step-text">{step}</span>
-                      {time && (
-                        <div className="timer-container">
-                          {!timer ? (
-                            <button
-                              className="timer-btn start"
-                              onClick={() => startTimer(selectedRecipe.id, index, time)}
-                            >
-                              ⏱️ {Math.floor(time / 60)}分
-                            </button>
-                          ) : timer.isCompleted ? (
-                            <button
-                              className="timer-btn completed"
-                              onClick={() => stopTimer(selectedRecipe.id, index)}
-                            >
-                              ✅ 完了！
-                            </button>
-                          ) : (
-                            <div className="timer-active">
-                              <span className={`timer-display ${timer.remaining <= 10 ? 'warning' : ''}`}>
-                                {formatTime(timer.remaining)}
-                              </span>
-                              {timer.isPaused ? (
-                                <button
-                                  className="timer-btn resume"
-                                  onClick={() => resumeTimer(selectedRecipe.id, index)}
-                                >
-                                  ▶️
-                                </button>
-                              ) : (
-                                <button
-                                  className="timer-btn pause"
-                                  onClick={() => pauseTimer(selectedRecipe.id, index)}
-                                >
-                                  ⏸️
-                                </button>
-                              )}
-                              <button
-                                className="timer-btn stop"
-                                onClick={() => stopTimer(selectedRecipe.id, index)}
-                              >
-                                ⏹️
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
+          </div>
 
-            {/* 副菜提案セクション */}
-            {selectedRecipe.sideDishes && selectedRecipe.sideDishes.length > 0 && (
-              <div className="side-dishes-section">
-                <h3>🍱 おすすめの副菜</h3>
-                <div className="side-dishes-list">
-                  {selectedRecipe.sideDishes.map((sideDish, index) => {
-                    // 副菜が既存のレシピに存在するかチェック
-                    const matchingRecipe = allRecipes.find(recipe => 
-                      recipe.name.includes(sideDish) || sideDish.includes(recipe.name)
-                    );
-                    
-                    return (
-                      <div key={index} className="side-dish-item">
-                        {matchingRecipe ? (
-                          <button 
-                            className="side-dish-link"
-                            onClick={() => openRecipe(matchingRecipe)}
-                          >
-                            {sideDish}
-                            <span className="link-icon">→</span>
-                          </button>
-                        ) : (
-                          <span className="side-dish-text">{sideDish}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            
-            <div className="memo-section">
-              <div className="memo-header">
-                <h3>📝 メモ</h3>
-                {memos[selectedRecipe.id] && (
-                  <button 
-                    className="clear-memo-btn"
-                    onClick={() => {
-                      if (window.confirm('メモを削除しますか？')) {
-                        clearMemo(selectedRecipe.id);
-                      }
-                    }}
-                  >
-                    🗑️
-                  </button>
-                )}
-              </div>
-              <div className="memo-container">
-                <textarea
-                  className="memo-textarea"
-                  placeholder="このレシピのメモを入力...（例：次は塩少なめ）"
-                  value={memos[selectedRecipe.id] || ''}
-                  onChange={(e) => {
-                    const text = e.target.value;
-                    if (text.length <= 200) {
-                      updateMemo(selectedRecipe.id, text);
-                    }
-                  }}
-                  maxLength={200}
-                  rows={4}
-                />
-                <div className="memo-counter">
-                  {(memos[selectedRecipe.id] || '').length}/200
-                </div>
-              </div>
-            </div>
+          {/* フローティングアクションボタン */}
+          <div className="floating-actions">
+            <button 
+              className={`fab cooking-fab ${cookingMode ? 'active' : ''}`}
+              onClick={toggleCookingMode}
+              title={cookingMode ? '調理モード終了' : '調理モード開始'}
+            >
+              {cookingMode ? '👨‍🍳' : '🔥'}
+            </button>
           </div>
         </div>
         
@@ -2257,6 +3325,160 @@ function App() {
     );
   };
 
+  const renderWeeklyMenu = () => {
+    const getDayName = (date) => {
+      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      return days[date.getDay()];
+    };
+
+    const formatDate = (date) => {
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    };
+
+    const getWeekDates = () => {
+      if (!currentWeekStart) {
+        // If no week start is set, use current week
+        const today = new Date();
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - today.getDay() + 1);
+        return Array.from({length: 7}, (_, i) => {
+          const date = new Date(monday);
+          date.setDate(monday.getDate() + i);
+          return date;
+        });
+      }
+      
+      const dates = [];
+      const weekStartDate = new Date(currentWeekStart);
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(weekStartDate);
+        date.setDate(weekStartDate.getDate() + i);
+        dates.push(date);
+      }
+      return dates;
+    };
+
+    const weekDates = getWeekDates();
+
+    return (
+      <div className="weekly-menu-content">
+        <div className="weekly-menu-header">
+          <h2>今週の献立</h2>
+          <div className="weekly-menu-actions">
+            <button 
+              className="generate-menu-btn"
+              onClick={generateWeeklyMenu}
+            >
+              献立生成
+            </button>
+            {weeklyMenu.length > 0 && (
+              <button 
+                className="generate-shopping-btn"
+                onClick={() => {
+                  try {
+                    const weeklyShoppingList = generateWeeklyShoppingList();
+                    if (weeklyShoppingList && weeklyShoppingList.length > 0) {
+                      setShoppingList(prev => [...prev, ...weeklyShoppingList]);
+                      setActiveTab('shopping');
+                      setNotification(`献立から買い物リスト（${weeklyShoppingList.length}件）を追加しました！`);
+                    } else {
+                      setNotification('買い物リストに追加する材料がありませんでした。');
+                    }
+                    setTimeout(() => setNotification(''), 3000);
+                  } catch (error) {
+                    console.error('Error handling shopping list button:', error);
+                    setNotification('買い物リストの生成でエラーが発生しました。');
+                    setTimeout(() => setNotification(''), 3000);
+                  }
+                }}
+              >
+                買い物リスト
+              </button>
+            )}
+          </div>
+        </div>
+
+        {weeklyMenu.length === 0 ? (
+          <div className="empty-menu">
+            <div className="empty-menu-icon">📅</div>
+            <p>「献立生成」ボタンを押して<br />1週間分の献立を自動作成しましょう</p>
+          </div>
+        ) : (
+          <div className="weekly-calendar">
+            {weekDates.map((date, index) => {
+              const recipe = weeklyMenu[index];
+              return (
+                <div key={index} className="day-card">
+                  <div className="day-header">
+                    <div className="day-info">
+                      <span className="day-name">{getDayName(date)}</span>
+                      <span className="day-date">{formatDate(date)}</span>
+                    </div>
+                    <div className="day-header-actions">
+                      <button 
+                        className="header-btn"
+                        onClick={() => {
+                          // 他のレシピをランダムに選択
+                          const newRecipe = allRecipes[Math.floor(Math.random() * allRecipes.length)];
+                          const newMenu = [...weeklyMenu];
+                          newMenu[index] = newRecipe;
+                          setWeeklyMenu(newMenu);
+                          localStorage.setItem('weeklyMenu', JSON.stringify(newMenu));
+                        }}
+                      >
+                        変更
+                      </button>
+                      <button 
+                        className="header-btn"
+                        onClick={() => {
+                          const newMenu = [...weeklyMenu];
+                          newMenu[index] = null;
+                          setWeeklyMenu(newMenu);
+                          localStorage.setItem('weeklyMenu', JSON.stringify(newMenu));
+                        }}
+                      >
+                        スキップ
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {recipe ? (
+                    <div className="recipe-card-mini" onClick={() => openRecipe(recipe)}>
+                      <div className="recipe-image-mini">
+                        <img 
+                          src={recipe.strMealThumb || recipe.image || 'https://via.placeholder.com/150x100?text=No+Image'} 
+                          alt={recipe.strMeal || recipe.name}
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/150x100?text=No+Image';
+                          }}
+                        />
+                      </div>
+                      <div className="recipe-info-mini">
+                        <h4 className="recipe-title-mini">{recipe.strMeal || recipe.name}</h4>
+                        <p className="recipe-area-mini">{recipe.strArea || recipe.category}</p>
+                        <div className="recipe-stats-mini">
+                          {recipe.nutrition && (
+                            <span className="calories-mini">
+                              {Math.round(recipe.nutrition.calories)}kcal
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="empty-day">
+                      <span>レシピなし</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="App mobile-app">
       <header className="app-header">
@@ -2276,6 +3498,8 @@ function App() {
         {activeTab === 'home' && renderHome()}
         {activeTab === 'search' && renderSearch()}
         {activeTab === 'bookmarks' && renderBookmarks()}
+        {activeTab === 'shopping' && renderShoppingList()}
+        {activeTab === 'weekly' && renderWeeklyMenu()}
         {renderFloatingTabBar()}
       </main>
       
@@ -2300,6 +3524,20 @@ function App() {
         >
           <span className="nav-icon">♡</span>
           <span className="nav-label">お気に入り</span>
+        </button>
+        <button 
+          className={`nav-btn ${activeTab === 'shopping' ? 'active' : ''}`}
+          onClick={() => setActiveTab('shopping')}
+        >
+          <span className="nav-icon">🛒</span>
+          <span className="nav-label">買い物</span>
+        </button>
+        <button 
+          className={`nav-btn ${activeTab === 'weekly' ? 'active' : ''}`}
+          onClick={() => setActiveTab('weekly')}
+        >
+          <span className="nav-icon">📅</span>
+          <span className="nav-label">献立</span>
         </button>
       </nav>
       
