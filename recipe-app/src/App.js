@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './App.css';
 import { recipesData } from './data/recipes';
 import LazyImage from './components/LazyImage';
+import IngredientOptimizer from './components/IngredientOptimizer';
 
 function App() {
   const [openRecipes, setOpenRecipes] = useState([]);
@@ -37,6 +38,9 @@ function App() {
   const [activeRecipeTab, setActiveRecipeTab] = useState('recipe');
   const [weeklyMenu, setWeeklyMenu] = useState([]);
   const [currentWeekStart, setCurrentWeekStart] = useState(null);
+  const [isSmartIngredientsExpanded, setIsSmartIngredientsExpanded] = useState(false);
+  const [selectedIngredientsCount, setSelectedIngredientsCount] = useState(0);
+  const [optimizedIngredients, setOptimizedIngredients] = useState({});
 
   useEffect(() => {
     const saved = localStorage.getItem('checkedIngredients');
@@ -601,6 +605,21 @@ function App() {
       delete newMemos[recipeId];
       return newMemos;
     });
+  };
+
+  // Smart ingredients functionality
+  const handleOptimizedIngredientsUpdate = (recipeId, newIngredients) => {
+    setOptimizedIngredients(prev => ({
+      ...prev,
+      [recipeId]: newIngredients
+    }));
+  };
+
+  const getDisplayIngredients = (recipe) => {
+    if (optimizedIngredients[recipe.id]) {
+      return optimizedIngredients[recipe.id];
+    }
+    return getAdjustedIngredients(recipe);
   };
 
   // Timer functions
@@ -2985,6 +3004,37 @@ function App() {
                       );
                     })}
                   </ul>
+                </div>
+
+                {/* 賢い食材使い切りアコーディオン */}
+                <div className="smart-ingredients-accordion">
+                  <button 
+                    className={`accordion-header ${isSmartIngredientsExpanded ? 'expanded' : ''}`}
+                    onClick={() => setIsSmartIngredientsExpanded(!isSmartIngredientsExpanded)}
+                  >
+                    <div className="accordion-header-content">
+                      <span className="accordion-title">🧅 賢い食材使い切り</span>
+                      {selectedIngredientsCount > 0 && (
+                        <span className="selection-count">{selectedIngredientsCount}件選択中</span>
+                      )}
+                    </div>
+                    <span className={`accordion-arrow ${isSmartIngredientsExpanded ? 'expanded' : ''}`}>
+                      ▼
+                    </span>
+                  </button>
+                  
+                  <div className={`accordion-content ${isSmartIngredientsExpanded ? 'expanded' : ''}`}>
+                    <div className="accordion-body">
+                      <IngredientOptimizer
+                        recipe={selectedRecipe}
+                        ingredients={getDisplayIngredients(selectedRecipe)}
+                        onOptimizedIngredientsUpdate={(newIngredients) => 
+                          handleOptimizedIngredientsUpdate(selectedRecipe.id, newIngredients)
+                        }
+                        onSelectionCountChange={setSelectedIngredientsCount}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* 作り方セクション */}

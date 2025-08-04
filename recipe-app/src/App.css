@@ -3507,3 +3507,120 @@ body {
     padding: 14px 24px;
   }
 }
+
+
+/* 賢い食材使い切りアコーディオン */
+.smart-ingredients-accordion {
+  margin: 20px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.accordion-header {
+  width: 100%;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8f2ff 100%);
+  border: none;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.accordion-header:hover {
+  background: linear-gradient(135deg, #f0f9ff 0%, #dbeafe 100%);
+}
+
+.accordion-header.expanded {
+  border-bottom-color: #e2e8f0;
+}
+
+.accordion-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.accordion-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.selection-count {
+  background: #3b82f6;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 12px;
+  animation: countBounce 0.3s ease;
+}
+
+@keyframes countBounce {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.accordion-arrow {
+  font-size: 14px;
+  color: #6b7280;
+  transition: transform 0.3s ease;
+  transform: rotate(-90deg);
+}
+
+.accordion-arrow.expanded {
+  transform: rotate(0deg);
+}
+
+.accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accordion-content.expanded {
+  max-height: 800px;
+}
+
+.accordion-body {
+  padding: 0;
+  animation: fadeIn 0.3s ease 0.1s both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* アコーディオン内のIngredientOptimizerのスタイル調整 */
+.accordion-content .ingredient-optimizer {
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 20px;
+}
+
