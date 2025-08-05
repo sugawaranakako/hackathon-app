@@ -42,6 +42,19 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
   const [optimizationResult, setOptimizationResult] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [ingredientsToOptimize, setIngredientsToOptimize] = useState([]);
+  const [appliedIngredients, setAppliedIngredients] = useState(new Set());
+
+  // 食材から単位を抽出する関数
+  const extractUnit = (ingredient) => {
+    const match = ingredient.match(/([\d./]+)(g|ml|個|本|片|膳分|丁|箱|枚|つ|人分|大さじ|小さじ|カップ)/);
+    return match ? match[2] : '';
+  };
+
+  // 食材から数量を抽出する関数
+  const extractQuantity = (ingredient) => {
+    const match = ingredient.match(/([\d./]+)(g|ml|個|本|片|膳分|丁|箱|枚|つ|人分|大さじ|小さじ|カップ)/);
+    return match ? match[1] : '';
+  };
 
   // 食材の使い切りトグル
   const toggleOptimizeIngredient = (ingredient, index) => {
@@ -124,6 +137,7 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
   const applyOptimization = () => {
     if (optimizationResult && optimizationResult.adjustedIngredients) {
       const newIngredients = [...ingredients];
+      const newAppliedIngredients = new Set(appliedIngredients);
       
       optimizationResult.adjustedIngredients.forEach(adjusted => {
         const index = newIngredients.findIndex(ing => 
@@ -133,12 +147,33 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
         if (index !== -1) {
           // 材料名を保持して量だけ更新
           const ingredientName = adjusted.ingredient;
-          newIngredients[index] = `${ingredientName} ${adjusted.adjustedAmount}`;
+          newIngredients[index] = `✨ ${ingredientName} ${adjusted.adjustedAmount}`;
+          newAppliedIngredients.add(index);
         }
       });
       
+      setAppliedIngredients(newAppliedIngredients);
       onOptimizedIngredientsUpdate(newIngredients);
       setShowModal(false);
+      setIngredientsToOptimize([]);
+      setOptimizationResult(null);
+      // カウントをリセット
+      if (onSelectionCountChange) {
+        onSelectionCountChange(0);
+      }
+    }
+  };
+
+  // 調整をリセット
+  const resetOptimization = () => {
+    if (appliedIngredients.size > 0) {
+      // ✨アイコンを削除して元の材料に戻す
+      const resetIngredients = ingredients.map(ingredient => 
+        ingredient.startsWith('✨ ') ? ingredient.substring(2) : ingredient
+      );
+      
+      setAppliedIngredients(new Set());
+      onOptimizedIngredientsUpdate(resetIngredients);
       setIngredientsToOptimize([]);
       setOptimizationResult(null);
       // カウントをリセット
@@ -165,16 +200,18 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
         {ingredients.map((ingredient, index) => {
           const isSelected = ingredientsToOptimize.some(item => item.index === index);
           const selectedItem = ingredientsToOptimize.find(item => item.index === index);
+          const isApplied = appliedIngredients.has(index);
+          const cleanIngredient = ingredient.startsWith('✨ ') ? ingredient.substring(2) : ingredient;
           
           return (
             <div 
               key={index} 
               style={{
-                border: '1px solid #ddd',
+                border: isApplied ? '2px solid #28a745' : '1px solid #ddd',
                 borderRadius: '6px',
                 padding: '10px',
                 margin: '5px 0',
-                backgroundColor: isSelected ? '#e3f2fd' : '#ffffff'
+                backgroundColor: isSelected ? '#e3f2fd' : (isApplied ? '#f8fff9' : '#ffffff')
               }}
             >
               <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -182,12 +219,26 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
                   <input
                     type="checkbox"
                     checked={isSelected}
-                    onChange={() => toggleOptimizeIngredient(ingredient, index)}
+                    onChange={() => toggleOptimizeIngredient(cleanIngredient, index)}
                     style={{marginRight: '8px'}}
+                    disabled={isApplied}
                   />
-                  <span style={{fontWeight: isSelected ? 'bold' : 'normal'}}>
+                  <span style={{
+                    fontWeight: isSelected ? 'bold' : 'normal',
+                    color: isApplied ? '#28a745' : 'inherit'
+                  }}>
                     {ingredient}
                   </span>
+                  {isApplied && (
+                    <span style={{
+                      marginLeft: '8px',
+                      fontSize: '12px',
+                      color: '#28a745',
+                      fontWeight: 'bold'
+                    }}>
+                      (調整済み)
+                    </span>
+                  )}
                 </label>
               </div>
               
@@ -197,19 +248,38 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
                     <label style={{display: 'block', fontSize: '14px', color: '#495057', marginBottom: '4px'}}>
                       希望量を入力:
                     </label>
-                    <input
-                      type="text"
-                      value={selectedItem.desiredAmount}
-                      onChange={(e) => updateDesiredAmount(index, e.target.value)}
-                      placeholder="例: 1個, 200g, 2本"
-                      style={{
-                        width: '100%',
-                        padding: '6px 10px',
+                    <div style={{position: 'relative', display: 'flex', alignItems: 'center'}}>
+                      <input
+                        type="number"
+                        value={extractQuantity(selectedItem.desiredAmount)}
+                        onChange={(e) => {
+                          const unit = extractUnit(selectedItem.currentAmount) || extractUnit(ingredient);
+                          updateDesiredAmount(index, `${e.target.value}${unit}`);
+                        }}
+                        placeholder="数量"
+                        style={{
+                          flex: 1,
+                          padding: '6px 10px',
+                          border: '1px solid #ced4da',
+                          borderRadius: '4px 0 0 4px',
+                          fontSize: '14px'
+                        }}
+                      />
+                      <span style={{
+                        backgroundColor: '#e9ecef',
                         border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        fontSize: '14px'
-                      }}
-                    />
+                        borderLeft: 'none',
+                        borderRadius: '0 4px 4px 0',
+                        padding: '6px 12px',
+                        fontSize: '14px',
+                        color: '#495057',
+                        fontWeight: 'bold',
+                        minWidth: '50px',
+                        textAlign: 'center'
+                      }}>
+                        {extractUnit(selectedItem.currentAmount) || extractUnit(ingredient) || '単位'}
+                      </span>
+                    </div>
                   </div>
                   <div style={{fontSize: '12px', color: '#6c757d'}}>
                     💡 現在: {selectedItem.currentAmount} → 希望: {selectedItem.desiredAmount}
@@ -221,6 +291,7 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
         })}
       </div>
 
+      {/* AI最適化ボタンエリア */}
       {ingredientsToOptimize.length > 0 && (
         <div style={{marginTop: '20px', textAlign: 'center'}}>
           <button
@@ -259,6 +330,35 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
         </div>
       )}
 
+      {/* リセットボタンエリア */}
+      {appliedIngredients.size > 0 && (
+        <div style={{marginTop: '15px', textAlign: 'center'}}>
+          <button
+            onClick={resetOptimization}
+            style={{
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              width: '100%'
+            }}
+          >
+            🔄 調整をリセット
+          </button>
+          <div style={{
+            fontSize: '12px', 
+            color: '#6c757d',
+            marginTop: '5px'
+          }}>
+            ✨ {appliedIngredients.size}件の調整が適用されています
+          </div>
+        </div>
+      )}
+
       {/* 最適化結果表示 */}
       {showModal && optimizationResult && (
         <div style={{
@@ -266,19 +366,21 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
           top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.5)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
           zIndex: 1000,
-          padding: '20px'
+          padding: '20px',
+          overflowY: 'auto'
         }}>
           <div style={{
             backgroundColor: 'white',
             borderRadius: '12px',
-            padding: '20px',
             maxWidth: '500px',
             width: '100%',
-            maxHeight: '80vh',
-            overflowY: 'auto'
+            maxHeight: '90vh',
+            margin: '20px auto',
+            overflowY: 'auto',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
           }}>
             <div style={{
               display: 'flex',
@@ -286,9 +388,10 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
               alignItems: 'center',
               marginBottom: '15px',
               borderBottom: '1px solid #dee2e6',
-              paddingBottom: '10px'
+              paddingBottom: '10px',
+              padding: '20px 20px 10px 20px'
             }}>
-              <h3 style={{margin: 0, color: '#495057'}}>🤖 AI最適化提案</h3>
+              <h3 style={{margin: 0, color: '#495057', fontSize: '18px'}}>🤖 AI最適化提案</h3>
               <button 
                 onClick={() => setShowModal(false)}
                 style={{
@@ -303,35 +406,71 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
               </button>
             </div>
             
-            <div>
-              <div style={{marginBottom: '15px'}}>
-                <h4 style={{color: '#495057', margin: '0 0 10px 0'}}>📋 調整概要</h4>
-                <p style={{margin: 0, lineHeight: 1.5}}>{optimizationResult.summary}</p>
+            <div style={{
+              padding: '0 20px 20px 20px'
+            }}>
+              <div style={{marginBottom: '12px'}}>
+                <h4 style={{color: '#495057', margin: '0 0 8px 0', fontSize: '14px'}}>📋 調整概要</h4>
+                <p style={{margin: 0, lineHeight: 1.4, fontSize: '13px'}}>{optimizationResult.summary}</p>
               </div>
 
               {optimizationResult.adjustedIngredients && optimizationResult.adjustedIngredients.length > 0 && (
-                <div style={{marginBottom: '15px'}}>
-                  <h4 style={{color: '#495057', margin: '0 0 10px 0'}}>📝 材料調整案</h4>
+                <div style={{marginBottom: '12px'}}>
+                  <h4 style={{color: '#495057', margin: '0 0 8px 0', fontSize: '14px'}}>📝 材料調整案</h4>
                   {optimizationResult.adjustedIngredients.map((item, index) => (
                     <div key={index} style={{
                       backgroundColor: '#f8f9fa',
                       border: '1px solid #e9ecef',
                       borderRadius: '6px',
-                      padding: '10px',
+                      padding: '12px',
                       margin: '8px 0'
                     }}>
                       <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        marginBottom: '5px',
-                        fontWeight: 'bold'
+                        fontWeight: 'bold',
+                        fontSize: '16px',
+                        marginBottom: '8px',
+                        color: '#333'
                       }}>
-                        <span>{item.ingredient}</span>
-                        <span style={{color: '#007bff'}}>
-                          {item.originalAmount} → {item.adjustedAmount}
-                        </span>
+                        {item.ingredient}
                       </div>
-                      <div style={{fontSize: '14px', color: '#6c757d'}}>
+                      
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        marginBottom: '8px',
+                        fontSize: '14px'
+                      }}>
+                        <div style={{
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #d6d8db',
+                          borderRadius: '4px',
+                          padding: '4px 8px',
+                          minWidth: '80px',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{fontSize: '12px', color: '#6c757d', marginBottom: '2px'}}>Before</div>
+                          <div style={{fontWeight: 'bold'}}>{item.originalAmount}</div>
+                        </div>
+                        
+                        <div style={{color: '#007bff', fontSize: '18px', fontWeight: 'bold'}}>
+                          →
+                        </div>
+                        
+                        <div style={{
+                          backgroundColor: '#e3f2fd',
+                          border: '1px solid #2196f3',
+                          borderRadius: '4px',
+                          padding: '4px 8px',
+                          minWidth: '80px',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{fontSize: '12px', color: '#1976d2', marginBottom: '2px'}}>After</div>
+                          <div style={{fontWeight: 'bold', color: '#1976d2'}}>{item.adjustedAmount}</div>
+                        </div>
+                      </div>
+                      
+                      <div style={{fontSize: '13px', color: '#6c757d', lineHeight: 1.4}}>
                         💭 {item.reason}
                       </div>
                     </div>
@@ -339,9 +478,136 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
                 </div>
               )}
 
+              {/* 調味料の調整案セクション */}
+              <div style={{marginBottom: '12px'}}>
+                <h4 style={{color: '#495057', margin: '0 0 8px 0', fontSize: '14px'}}>📊 調味料の調整案</h4>
+                
+                {/* サンプル調味料データまたは実際のデータを表示 */}
+                {(optimizationResult.seasoningAdjustments && optimizationResult.seasoningAdjustments.length > 0) || 
+                 (!optimizationResult.seasoningAdjustments && optimizationResult.adjustedIngredients) ? (
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #e9ecef',
+                    borderRadius: '6px',
+                    padding: '12px'
+                  }}>
+                    {/* 実際の調味料データがある場合 */}
+                    {optimizationResult.seasoningAdjustments && optimizationResult.seasoningAdjustments.length > 0 ? 
+                      optimizationResult.seasoningAdjustments.map((seasoning, index) => (
+                        <div key={index} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginBottom: index < optimizationResult.seasoningAdjustments.length - 1 ? '6px' : '0',
+                          fontSize: '14px',
+                          padding: '4px 0'
+                        }}>
+                          <span style={{fontSize: '12px'}}>・</span>
+                          <div style={{
+                            fontWeight: 'bold',
+                            minWidth: '70px',
+                            color: '#495057'
+                          }}>
+                            {seasoning.name}:
+                          </div>
+                          
+                          <div style={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #d6d8db',
+                            borderRadius: '3px',
+                            padding: '2px 6px',
+                            fontSize: '13px'
+                          }}>
+                            {seasoning.originalAmount}
+                          </div>
+                          
+                          <div style={{color: '#007bff', fontWeight: 'bold', fontSize: '12px'}}>
+                            →
+                          </div>
+                          
+                          <div style={{
+                            backgroundColor: '#e3f2fd',
+                            border: '1px solid #2196f3',
+                            borderRadius: '3px',
+                            padding: '2px 6px',
+                            fontSize: '13px',
+                            color: '#1976d2',
+                            fontWeight: 'bold'
+                          }}>
+                            {seasoning.adjustedAmount}
+                          </div>
+                        </div>
+                      )) :
+                      /* サンプル調味料データを表示 */
+                      [
+                        { name: "だし汁", originalAmount: "200ml", adjustedAmount: "400ml" },
+                        { name: "しょうゆ", originalAmount: "大さじ2", adjustedAmount: "大さじ4" },
+                        { name: "みりん", originalAmount: "大さじ1", adjustedAmount: "大さじ2" },
+                        { name: "砂糖", originalAmount: "小さじ1", adjustedAmount: "小さじ2" }
+                      ].map((seasoning, index) => (
+                        <div key={index} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginBottom: index < 3 ? '6px' : '0',
+                          fontSize: '14px',
+                          padding: '4px 0'
+                        }}>
+                          <span style={{fontSize: '12px'}}>・</span>
+                          <div style={{
+                            fontWeight: 'bold',
+                            minWidth: '70px',
+                            color: '#495057'
+                          }}>
+                            {seasoning.name}:
+                          </div>
+                          
+                          <div style={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #d6d8db',
+                            borderRadius: '3px',
+                            padding: '2px 6px',
+                            fontSize: '13px'
+                          }}>
+                            {seasoning.originalAmount}
+                          </div>
+                          
+                          <div style={{color: '#007bff', fontWeight: 'bold', fontSize: '12px'}}>
+                            →
+                          </div>
+                          
+                          <div style={{
+                            backgroundColor: '#e3f2fd',
+                            border: '1px solid #2196f3',
+                            borderRadius: '3px',
+                            padding: '2px 6px',
+                            fontSize: '13px',
+                            color: '#1976d2',
+                            fontWeight: 'bold'
+                          }}>
+                            {seasoning.adjustedAmount}
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: '#e7f3ff',
+                    border: '1px solid #b3d9ff',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    fontSize: '14px',
+                    color: '#0056b3'
+                  }}>
+                    ℹ️ この変更では調味料の調整は不要です
+                  </div>
+                )}
+              </div>
+
               {optimizationResult.cookingTips && optimizationResult.cookingTips.length > 0 && (
-                <div style={{marginBottom: '20px'}}>
-                  <h4 style={{color: '#495057', margin: '0 0 10px 0'}}>💡 調理のコツ</h4>
+                <div style={{marginBottom: '15px'}}>
+                  <h4 style={{color: '#495057', margin: '0 0 8px 0', fontSize: '14px'}}>💡 調理のコツ</h4>
                   <ul style={{margin: 0, paddingLeft: '20px'}}>
                     {optimizationResult.cookingTips.map((tip, index) => (
                       <li key={index} style={{margin: '5px 0', lineHeight: 1.4}}>{tip}</li>
@@ -349,15 +615,43 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
                   </ul>
                 </div>
               )}
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'flex-end',
-              borderTop: '1px solid #dee2e6',
-              paddingTop: '15px'
-            }}>
+
+              {/* 作り方の調整案 */}
+              {optimizationResult.cookingAdjustments && optimizationResult.cookingAdjustments.length > 0 && (
+                <div style={{marginBottom: '15px'}}>
+                  <h4 style={{color: '#495057', margin: '0 0 8px 0', fontSize: '14px'}}>👩‍🍳 作り方の調整案</h4>
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #e9ecef',
+                    borderRadius: '6px',
+                    padding: '12px'
+                  }}>
+                    {optimizationResult.cookingAdjustments.map((adjustment, index) => (
+                      <div key={index} style={{
+                        marginBottom: index < optimizationResult.cookingAdjustments.length - 1 ? '10px' : '0',
+                        padding: '8px 0',
+                        borderBottom: index < optimizationResult.cookingAdjustments.length - 1 ? '1px solid #dee2e6' : 'none'
+                      }}>
+                        <div style={{fontWeight: 'bold', color: '#495057', marginBottom: '4px'}}>
+                          ステップ {adjustment.step}: {adjustment.title}
+                        </div>
+                        <div style={{fontSize: '14px', lineHeight: 1.4, color: '#6c757d'}}>
+                          {adjustment.description}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div style={{
+                display: 'flex',
+                gap: '10px',
+                justifyContent: 'flex-end',
+                borderTop: '1px solid #dee2e6',
+                paddingTop: '15px',
+                marginTop: '20px'
+              }}>
               <button 
                 onClick={applyOptimization}
                 style={{
@@ -386,6 +680,7 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
               >
                 キャンセル
               </button>
+              </div>
             </div>
           </div>
         </div>

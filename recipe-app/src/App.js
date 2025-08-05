@@ -4,6 +4,352 @@ import { recipesData } from './data/recipes';
 import LazyImage from './components/LazyImage';
 import IngredientOptimizer from './components/IngredientOptimizer';
 
+// 強力な翻訳システム
+const createTranslationSystem = () => {
+  const DEBUG_MODE = true; // デバッグモードのオン/オフ
+  
+  // 包括的な翻訳辞書
+  const comprehensiveDict = {
+    // 野菜・青果類（完全版）
+    'green olives': 'グリーンオリーブ',
+    'black olives': 'ブラックオリーブ',
+    'olives': 'オリーブ',
+    'olive': 'オリーブ',
+    'green olive': 'グリーンオリーブ',
+    'black olive': 'ブラックオリーブ',
+    'kalamata olives': 'カラマタオリーブ',
+    'stuffed olives': '詰め物入りオリーブ',
+    
+    // オイル・調味料類（完全版）
+    'extra virgin olive oil': 'エクストラバージンオリーブオイル',
+    'extra-virgin olive oil': 'エクストラバージンオリーブオイル',
+    'olive oil': 'オリーブオイル',
+    'vegetable oil': 'サラダ油',
+    'canola oil': 'キャノーラ油',
+    'sesame oil': 'ごま油',
+    'coconut oil': 'ココナッツオイル',
+    'sunflower oil': 'ひまわり油',
+    'peanut oil': 'ピーナッツオイル',
+    
+    // 肉類（完全版）
+    'chicken breast': '鶏むね肉',
+    'chicken thigh': '鶏もも肉',
+    'chicken wing': '手羽先',
+    'chicken drumstick': '手羽元',
+    'ground chicken': '鶏ひき肉',
+    'whole chicken': '丸鶏',
+    'chicken': '鶏肉',
+    'beef steak': '牛ステーキ',
+    'ground beef': '牛ひき肉',
+    'beef chuck': '牛肩肉',
+    'beef sirloin': '牛サーロイン',
+    'beef tenderloin': '牛ヒレ肉',
+    'beef': '牛肉',
+    'pork shoulder': '豚肩肉',
+    'pork chop': '豚ロース',
+    'ground pork': '豚ひき肉',
+    'pork belly': '豚バラ肉',
+    'pork': '豚肉',
+    'lamb': 'ラム肉',
+    'veal': '仔牛肉',
+    'duck': '鴨肉',
+    'turkey': '七面鳥',
+    'ham': 'ハム',
+    'bacon': 'ベーコン',
+    'sausage': 'ソーセージ',
+    'prosciutto': 'プロシュート',
+    
+    // 魚介類（完全版）
+    'salmon fillet': 'サーモンフィレ',
+    'salmon': 'サーモン',
+    'tuna': 'ツナ',
+    'cod': 'タラ',
+    'halibut': 'ヒラメ',
+    'sea bass': 'スズキ',
+    'mackerel': 'サバ',
+    'sardine': 'イワシ',
+    'shrimp': 'エビ',
+    'prawns': 'エビ',
+    'lobster': 'ロブスター',
+    'crab': 'カニ',
+    'scallop': 'ホタテ',
+    'oyster': 'カキ',
+    'clam': 'アサリ',
+    'mussel': 'ムール貝',
+    'squid': 'イカ',
+    'octopus': 'タコ',
+    'fish': '魚',
+    
+    // 野菜類（超完全版）
+    'red onion': '赤玉ねぎ',
+    'white onion': '白玉ねぎ',
+    'yellow onion': '黄玉ねぎ',
+    'sweet onion': '甘玉ねぎ',
+    'green onion': '青ネギ',
+    'spring onion': '青ネギ',
+    'scallion': '青ネギ',
+    'shallot': 'エシャロット',
+    'leek': '長ネギ',
+    'onion': '玉ねぎ',
+    'onions': '玉ねぎ',
+    
+    'roma tomato': 'ロマトマト',
+    'cherry tomato': 'ミニトマト',
+    'grape tomato': 'グレープトマト',
+    'beefsteak tomato': 'ビーフステーキトマト',
+    'heirloom tomato': 'エアルームトマト',
+    'sun-dried tomato': 'ドライトマト',
+    'tomato paste': 'トマトペースト',
+    'tomato sauce': 'トマトソース',
+    'crushed tomato': 'クラッシュトマト',
+    'diced tomato': 'ダイストマト',
+    'whole tomato': 'ホールトマト',
+    'tomato': 'トマト',
+    'tomatoes': 'トマト',
+    
+    'russet potato': 'ラセット芋',
+    'red potato': '赤じゃがいも',
+    'fingerling potato': 'フィンガーリング芋',
+    'baby potato': '小芋',
+    'sweet potato': 'さつまいも',
+    'potato': 'じゃがいも',
+    'potatoes': 'じゃがいも',
+    
+    'baby carrot': 'ベビーキャロット',
+    'carrot': '人参',
+    'carrots': '人参',
+    
+    'garlic clove': 'にんにく片',
+    'garlic bulb': 'にんにく玉',
+    'minced garlic': 'にんにくみじん切り',
+    'garlic powder': 'にんにくパウダー',
+    'garlic': 'にんにく',
+    
+    'fresh ginger': '生姜',
+    'ground ginger': '生姜パウダー',
+    'ginger root': '生姜',
+    'ginger': '生姜',
+    
+    // ハーブ・スパイス（完全版）
+    'fresh basil': 'フレッシュバジル',
+    'dried basil': 'ドライバジル',
+    'basil leaves': 'バジルの葉',
+    'thai basil': 'タイバジル',
+    'basil': 'バジル',
+    
+    'fresh parsley': 'フレッシュパセリ',
+    'dried parsley': 'ドライパセリ',
+    'flat-leaf parsley': 'イタリアンパセリ',
+    'curly parsley': 'カーリーパセリ',
+    'parsley': 'パセリ',
+    
+    'fresh cilantro': 'フレッシュパクチー',
+    'cilantro leaves': 'パクチーの葉',
+    'cilantro': 'パクチー',
+    'coriander leaves': 'パクチー',
+    'fresh coriander': 'フレッシュパクチー',
+    
+    'fresh mint': 'フレッシュミント',
+    'dried mint': 'ドライミント',
+    'mint leaves': 'ミントの葉',
+    'mint': 'ミント',
+    
+    'fresh thyme': 'フレッシュタイム',
+    'dried thyme': 'ドライタイム',
+    'thyme leaves': 'タイムの葉',
+    'thyme': 'タイム',
+    
+    'fresh oregano': 'フレッシュオレガノ',
+    'dried oregano': 'ドライオレガノ',
+    'oregano': 'オレガノ',
+    
+    'fresh rosemary': 'フレッシュローズマリー',
+    'dried rosemary': 'ドライローズマリー',
+    'rosemary sprigs': 'ローズマリーの枝',
+    'rosemary': 'ローズマリー',
+    
+    'bay leaf': 'ローリエ',
+    'bay leaves': 'ローリエ',
+    'fresh bay leaves': 'フレッシュローリエ',
+    
+    'black pepper': '黒こしょう',
+    'white pepper': '白こしょう',
+    'ground black pepper': '黒こしょうパウダー',
+    'peppercorns': 'こしょうの実',
+    'pepper': 'こしょう',
+    
+    'sea salt': '海塩',
+    'kosher salt': 'コーシャーソルト',
+    'table salt': '食塩',
+    'coarse salt': '粗塩',
+    'fine salt': '細塩',
+    'salt': '塩',
+    
+    'paprika': 'パプリカパウダー',
+    'smoked paprika': 'スモークパプリカ',
+    'hot paprika': 'ホットパプリカ',
+    'sweet paprika': 'スウィートパプリカ',
+    
+    'cumin': 'クミン',
+    'ground cumin': 'クミンパウダー',
+    'cumin seeds': 'クミンシード',
+    
+    'coriander': 'コリアンダー',
+    'ground coriander': 'コリアンダーパウダー',
+    'coriander seeds': 'コリアンダーシード',
+    
+    'turmeric': 'ターメリック',
+    'ground turmeric': 'ターメリックパウダー',
+    
+    'curry powder': 'カレー粉',
+    'garam masala': 'ガラムマサラ',
+    'chili powder': 'チリパウダー',
+    'cayenne pepper': 'カイエンペッパー',
+    'red pepper flakes': '唐辛子フレーク',
+    'crushed red pepper': '砕いた唐辛子',
+    
+    'cinnamon': 'シナモン',
+    'ground cinnamon': 'シナモンパウダー',
+    'cinnamon stick': 'シナモンスティック',
+    
+    'nutmeg': 'ナツメグ',
+    'ground nutmeg': 'ナツメグパウダー',
+    'whole nutmeg': 'ナツメグホール',
+    
+    'clove': 'クローブ',
+    'cloves': 'クローブ',
+    'ground cloves': 'クローブパウダー',
+    'whole cloves': 'クローブホール',
+    
+    'cardamom': 'カルダモン',
+    'ground cardamom': 'カルダモンパウダー',
+    'cardamom pods': 'カルダモンポッド',
+    
+    'star anise': '八角',
+    'fennel seeds': 'フェンネルシード',
+    'mustard seeds': 'マスタードシード',
+    'sesame seeds': 'ごま',
+    'poppy seeds': 'ポピーシード',
+    'saffron': 'サフラン',
+    'vanilla': 'バニラ',
+    'vanilla extract': 'バニラエッセンス',
+    'vanilla bean': 'バニラビーンズ',
+    
+    // その他基本的な翻訳を省略...
+    'bring to a boil': '沸騰させる',
+    'wash': '洗う',
+    'cut': '切る',
+    'chop': '刻む',
+    'slice': 'スライスする',
+    'minutes': '分',
+    'teaspoon': '小さじ',
+    'tablespoon': '大さじ',
+    'cup': 'カップ'
+  };
+  
+  // 翻訳漏れチェック関数
+  const checkUntranslated = (text) => {
+    if (!DEBUG_MODE) return [];
+    
+    const words = text.split(/\s+/);
+    const untranslated = [];
+    
+    words.forEach(word => {
+      const cleanWord = word.replace(/[^\w\s]/g, '').toLowerCase();
+      if (cleanWord && /^[a-zA-Z]+$/.test(cleanWord) && cleanWord.length > 2) {
+        if (!comprehensiveDict[cleanWord] && !comprehensiveDict[cleanWord + 's'] && !comprehensiveDict[cleanWord.slice(0, -1)]) {
+          untranslated.push(cleanWord);
+        }
+      }
+    });
+    
+    return [...new Set(untranslated)]; // 重複除去
+  };
+  
+  // メイン翻訳関数
+  const translate = (text, type = 'general') => {
+    if (!text || typeof text !== 'string') return text;
+    
+    if (DEBUG_MODE) {
+      console.log(`🔍 [翻訳前 ${type}]:`, text);
+    }
+    
+    let translated = text;
+    
+    // 1. 長いフレーズから順に翻訳（重要：順序が大事）
+    const sortedEntries = Object.entries(comprehensiveDict)
+      .sort(([a], [b]) => b.length - a.length);
+    
+    sortedEntries.forEach(([english, japanese]) => {
+      const regex = new RegExp(`\\b${english.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      if (regex.test(translated)) {
+        translated = translated.replace(regex, japanese);
+      }
+    });
+    
+    // 2. 翻訳漏れをチェック
+    const untranslated = checkUntranslated(translated);
+    if (untranslated.length > 0 && DEBUG_MODE) {
+      console.warn(`⚠️ 翻訳漏れ detected:`, untranslated);
+    }
+    
+    if (DEBUG_MODE) {
+      console.log(`✅ [翻訳後 ${type}]:`, translated);
+    }
+    
+    return translated;
+  };
+  
+  return {
+    translate,
+    checkUntranslated,
+    DEBUG_MODE
+  };
+};
+
+// 翻訳システムのインスタンス作成
+const translationSystem = createTranslationSystem();
+
+const translateIngredient = (ingredient) => {
+  return translationSystem.translate(ingredient, 'ingredient');
+};
+
+const translateMeasure = (measure) => {
+  return translationSystem.translate(measure, 'measure');
+};
+
+const translateMealName = (name) => {
+  return translationSystem.translate(name, 'meal');
+};
+
+const translateInstructions = (instructions) => {
+  if (!instructions) return instructions;
+  
+  // 文字列の場合
+  if (typeof instructions === 'string') {
+    return translationSystem.translate(instructions, 'instructions');
+  }
+  
+  // 配列の場合
+  if (Array.isArray(instructions)) {
+    return instructions.map((step, index) => {
+      const translatedStep = translationSystem.translate(step, 'instructions');
+      
+      // ステップ番号を保持
+      if (/^\d+\./.test(translatedStep)) {
+        return translatedStep;
+      } else if (/^\d+/.test(step)) {
+        const num = step.match(/^(\d+)/)[1];
+        return translatedStep.replace(/^\d+/, `${num}.`);
+      }
+      
+      return translatedStep;
+    });
+  }
+  
+  return instructions;
+};
+
 function App() {
   const [openRecipes, setOpenRecipes] = useState([]);
   const [activeRecipeIndex, setActiveRecipeIndex] = useState(0);
@@ -1417,857 +1763,12 @@ function App() {
     return badges;
   };
 
-  
-  // 強力な翻訳システム
-  const createTranslationSystem = () => {
-    const DEBUG_MODE = true; // デバッグモードのオン/オフ
-    
-    // 包括的な翻訳辞書
-    const comprehensiveDict = {
-      // 野菜・青果類（完全版）
-      'green olives': 'グリーンオリーブ',
-      'black olives': 'ブラックオリーブ',
-      'olives': 'オリーブ',
-      'olive': 'オリーブ',
-      'green olive': 'グリーンオリーブ',
-      'black olive': 'ブラックオリーブ',
-      'kalamata olives': 'カラマタオリーブ',
-      'stuffed olives': '詰め物入りオリーブ',
-      
-      // オイル・調味料類（完全版）
-      'extra virgin olive oil': 'エクストラバージンオリーブオイル',
-      'extra-virgin olive oil': 'エクストラバージンオリーブオイル',
-      'olive oil': 'オリーブオイル',
-      'vegetable oil': 'サラダ油',
-      'canola oil': 'キャノーラ油',
-      'sesame oil': 'ごま油',
-      'coconut oil': 'ココナッツオイル',
-      'sunflower oil': 'ひまわり油',
-      'peanut oil': 'ピーナッツオイル',
-      
-      // 肉類（完全版）
-      'chicken breast': '鶏むね肉',
-      'chicken thigh': '鶏もも肉',
-      'chicken wing': '手羽先',
-      'chicken drumstick': '手羽元',
-      'ground chicken': '鶏ひき肉',
-      'whole chicken': '丸鶏',
-      'chicken': '鶏肉',
-      'beef steak': '牛ステーキ',
-      'ground beef': '牛ひき肉',
-      'beef chuck': '牛肩肉',
-      'beef sirloin': '牛サーロイン',
-      'beef tenderloin': '牛ヒレ肉',
-      'beef': '牛肉',
-      'pork shoulder': '豚肩肉',
-      'pork chop': '豚ロース',
-      'ground pork': '豚ひき肉',
-      'pork belly': '豚バラ肉',
-      'pork': '豚肉',
-      'lamb': 'ラム肉',
-      'veal': '仔牛肉',
-      'duck': '鴨肉',
-      'turkey': '七面鳥',
-      'ham': 'ハム',
-      'bacon': 'ベーコン',
-      'sausage': 'ソーセージ',
-      'prosciutto': 'プロシュート',
-      
-      // 魚介類（完全版）
-      'salmon fillet': 'サーモンフィレ',
-      'salmon': 'サーモン',
-      'tuna': 'ツナ',
-      'cod': 'タラ',
-      'halibut': 'ヒラメ',
-      'sea bass': 'スズキ',
-      'mackerel': 'サバ',
-      'sardine': 'イワシ',
-      'shrimp': 'エビ',
-      'prawns': 'エビ',
-      'lobster': 'ロブスター',
-      'crab': 'カニ',
-      'scallop': 'ホタテ',
-      'oyster': 'カキ',
-      'clam': 'アサリ',
-      'mussel': 'ムール貝',
-      'squid': 'イカ',
-      'octopus': 'タコ',
-      'fish': '魚',
-      
-      // 野菜類（超完全版）
-      'red onion': '赤玉ねぎ',
-      'white onion': '白玉ねぎ',
-      'yellow onion': '黄玉ねぎ',
-      'sweet onion': '甘玉ねぎ',
-      'green onion': '青ネギ',
-      'spring onion': '青ネギ',
-      'scallion': '青ネギ',
-      'shallot': 'エシャロット',
-      'leek': '長ネギ',
-      'onion': '玉ねぎ',
-      'onions': '玉ねぎ',
-      
-      'roma tomato': 'ロマトマト',
-      'cherry tomato': 'ミニトマト',
-      'grape tomato': 'グレープトマト',
-      'beefsteak tomato': 'ビーフステーキトマト',
-      'heirloom tomato': 'エアルームトマト',
-      'sun-dried tomato': 'ドライトマト',
-      'tomato paste': 'トマトペースト',
-      'tomato sauce': 'トマトソース',
-      'crushed tomato': 'クラッシュトマト',
-      'diced tomato': 'ダイストマト',
-      'whole tomato': 'ホールトマト',
-      'tomato': 'トマト',
-      'tomatoes': 'トマト',
-      
-      'russet potato': 'ラセット芋',
-      'red potato': '赤じゃがいも',
-      'fingerling potato': 'フィンガーリング芋',
-      'baby potato': '小芋',
-      'sweet potato': 'さつまいも',
-      'potato': 'じゃがいも',
-      'potatoes': 'じゃがいも',
-      
-      'baby carrot': 'ベビーキャロット',
-      'carrot': '人参',
-      'carrots': '人参',
-      
-      'garlic clove': 'にんにく片',
-      'garlic bulb': 'にんにく玉',
-      'minced garlic': 'にんにくみじん切り',
-      'garlic powder': 'にんにくパウダー',
-      'garlic': 'にんにく',
-      
-      'fresh ginger': '生姜',
-      'ground ginger': '生姜パウダー',
-      'ginger root': '生姜',
-      'ginger': '生姜',
-      
-      // ハーブ・スパイス（完全版）
-      'fresh basil': 'フレッシュバジル',
-      'dried basil': 'ドライバジル',
-      'basil leaves': 'バジルの葉',
-      'thai basil': 'タイバジル',
-      'basil': 'バジル',
-      
-      'fresh parsley': 'フレッシュパセリ',
-      'dried parsley': 'ドライパセリ',
-      'flat-leaf parsley': 'イタリアンパセリ',
-      'curly parsley': 'カーリーパセリ',
-      'parsley': 'パセリ',
-      
-      'fresh cilantro': 'フレッシュパクチー',
-      'cilantro leaves': 'パクチーの葉',
-      'cilantro': 'パクチー',
-      'coriander leaves': 'パクチー',
-      'fresh coriander': 'フレッシュパクチー',
-      
-      'fresh mint': 'フレッシュミント',
-      'dried mint': 'ドライミント',
-      'mint leaves': 'ミントの葉',
-      'mint': 'ミント',
-      
-      'fresh thyme': 'フレッシュタイム',
-      'dried thyme': 'ドライタイム',
-      'thyme leaves': 'タイムの葉',
-      'thyme': 'タイム',
-      
-      'fresh oregano': 'フレッシュオレガノ',
-      'dried oregano': 'ドライオレガノ',
-      'oregano': 'オレガノ',
-      
-      'fresh rosemary': 'フレッシュローズマリー',
-      'dried rosemary': 'ドライローズマリー',
-      'rosemary sprigs': 'ローズマリーの枝',
-      'rosemary': 'ローズマリー',
-      
-      'bay leaf': 'ローリエ',
-      'bay leaves': 'ローリエ',
-      'fresh bay leaves': 'フレッシュローリエ',
-      
-      'black pepper': '黒こしょう',
-      'white pepper': '白こしょう',
-      'ground black pepper': '黒こしょうパウダー',
-      'peppercorns': 'こしょうの実',
-      'pepper': 'こしょう',
-      
-      'sea salt': '海塩',
-      'kosher salt': 'コーシャーソルト',
-      'table salt': '食塩',
-      'coarse salt': '粗塩',
-      'fine salt': '細塩',
-      'salt': '塩',
-      
-      'paprika': 'パプリカパウダー',
-      'smoked paprika': 'スモークパプリカ',
-      'hot paprika': 'ホットパプリカ',
-      'sweet paprika': 'スウィートパプリカ',
-      
-      'cumin': 'クミン',
-      'ground cumin': 'クミンパウダー',
-      'cumin seeds': 'クミンシード',
-      
-      'coriander': 'コリアンダー',
-      'ground coriander': 'コリアンダーパウダー',
-      'coriander seeds': 'コリアンダーシード',
-      
-      'turmeric': 'ターメリック',
-      'ground turmeric': 'ターメリックパウダー',
-      
-      'curry powder': 'カレー粉',
-      'garam masala': 'ガラムマサラ',
-      'chili powder': 'チリパウダー',
-      'cayenne pepper': 'カイエンペッパー',
-      'red pepper flakes': '唐辛子フレーク',
-      'crushed red pepper': '砕いた唐辛子',
-      
-      'cinnamon': 'シナモン',
-      'ground cinnamon': 'シナモンパウダー',
-      'cinnamon stick': 'シナモンスティック',
-      
-      'nutmeg': 'ナツメグ',
-      'ground nutmeg': 'ナツメグパウダー',
-      'whole nutmeg': 'ナツメグホール',
-      
-      'clove': 'クローブ',
-      'cloves': 'クローブ',
-      'ground cloves': 'クローブパウダー',
-      'whole cloves': 'クローブホール',
-      
-      'cardamom': 'カルダモン',
-      'ground cardamom': 'カルダモンパウダー',
-      'cardamom pods': 'カルダモンポッド',
-      
-      'star anise': '八角',
-      'fennel seeds': 'フェンネルシード',
-      'mustard seeds': 'マスタードシード',
-      'sesame seeds': 'ごま',
-      'poppy seeds': 'ポピーシード',
-      'saffron': 'サフラン',
-      'vanilla': 'バニラ',
-      'vanilla extract': 'バニラエッセンス',
-      'vanilla bean': 'バニラビーンズ',
-      
-      // 乳製品（完全版）
-      'whole milk': '全脂肪牛乳',
-      'skim milk': '無脂肪牛乳',
-      'low-fat milk': '低脂肪牛乳',
-      '2% milk': '2%牛乳',
-      'buttermilk': 'バターミルク',
-      'evaporated milk': 'エバミルク',
-      'condensed milk': 'コンデンスミルク',
-      'milk': '牛乳',
-      
-      'heavy cream': '生クリーム',
-      'whipping cream': 'ホイップクリーム',
-      'half and half': 'ハーフアンドハーフ',
-      'sour cream': 'サワークリーム',
-      'cream': 'クリーム',
-      
-      'plain yogurt': 'プレーンヨーグルト',
-      'greek yogurt': 'ギリシャヨーグルト',
-      'vanilla yogurt': 'バニラヨーグルト',
-      'yogurt': 'ヨーグルト',
-      
-      'unsalted butter': '無塩バター',
-      'salted butter': '有塩バター',
-      'clarified butter': '澄ましバター',
-      'butter': 'バター',
-      
-      'cream cheese': 'クリームチーズ',
-      'cottage cheese': 'カッテージチーズ',
-      'ricotta cheese': 'リコッタチーズ',
-      'mascarpone': 'マスカルポーネ',
-      'mozzarella cheese': 'モッツァレラチーズ',
-      'fresh mozzarella': 'フレッシュモッツァレラ',
-      'parmesan cheese': 'パルメザンチーズ',
-      'grated parmesan': 'パルメザンチーズすりおろし',
-      'romano cheese': 'ロマーノチーズ',
-      'cheddar cheese': 'チェダーチーズ',
-      'swiss cheese': 'スイスチーズ',
-      'gouda cheese': 'ゴーダチーズ',
-      'brie cheese': 'ブリーチーズ',
-      'camembert': 'カマンベール',
-      'blue cheese': 'ブルーチーズ',
-      'feta cheese': 'フェタチーズ',
-      'goat cheese': 'ゴートチーズ',
-      'cheese': 'チーズ',
-      
-      // 穀物・パン・パスタ（完全版）
-      'white rice': '白米',
-      'brown rice': '玄米',
-      'basmati rice': 'バスマティライス',
-      'jasmine rice': 'ジャスミンライス',
-      'wild rice': 'ワイルドライス',
-      'arborio rice': 'アルボリオ米',
-      'sushi rice': 'すし米',
-      'long-grain rice': '長粒米',
-      'short-grain rice': '短粒米',
-      'rice': '米',
-      
-      'all-purpose flour': '中力粉',
-      'bread flour': '強力粉',
-      'cake flour': '薄力粉',
-      'whole wheat flour': '全粒粉',
-      'self-rising flour': 'セルフレイジングフラワー',
-      'pastry flour': 'ペストリーフラワー',
-      'flour': '小麦粉',
-      
-      'white bread': '食パン',
-      'whole wheat bread': '全粒粉パン',
-      'sourdough bread': 'サワードウパン',
-      'rye bread': 'ライ麦パン',
-      'pumpernickel': 'プンパーニッケル',
-      'baguette': 'バゲット',
-      'ciabatta': 'チャバタ',
-      'focaccia': 'フォカッチャ',
-      'pita bread': 'ピタパン',
-      'naan': 'ナン',
-      'tortilla': 'トルティーヤ',
-      'bread': 'パン',
-      
-      'spaghetti': 'スパゲッティ',
-      'linguine': 'リングイネ',
-      'fettuccine': 'フェットチーネ',
-      'angel hair': 'エンジェルヘア',
-      'penne': 'ペンネ',
-      'rigatoni': 'リガトーニ',
-      'fusilli': 'フジッリ',
-      'rotini': 'ロティーニ',
-      'farfalle': 'ファルファッレ',
-      'bow tie pasta': '蝶々パスタ',
-      'shells': 'シェルパスタ',
-      'macaroni': 'マカロニ',
-      'elbow macaroni': 'エルボマカロニ',
-      'lasagna noodles': 'ラザニアシート',
-      'ravioli': 'ラビオリ',
-      'tortellini': 'トルテリーニ',
-      'gnocchi': 'ニョッキ',
-      'pasta': 'パスタ',
-      
-      // 豆類・ナッツ（完全版）
-      'black beans': '黒豆',
-      'kidney beans': 'キドニービーンズ',
-      'pinto beans': 'ピント豆',
-      'navy beans': 'ネイビービーンズ',
-      'cannellini beans': 'カネリーニ豆',
-      'lima beans': 'ライマ豆',
-      'chickpeas': 'ひよこ豆',
-      'garbanzo beans': 'ひよこ豆',
-      'lentils': 'レンズ豆',
-      'red lentils': '赤レンズ豆',
-      'green lentils': '緑レンズ豆',
-      'split peas': 'スプリットピー',
-      'black-eyed peas': 'ブラックアイビーンズ',
-      'edamame': '枝豆',
-      'soybeans': '大豆',
-      'beans': '豆',
-      
-      'almonds': 'アーモンド',
-      'walnuts': 'くるみ',
-      'pecans': 'ピーカン',
-      'cashews': 'カシューナッツ',
-      'pistachios': 'ピスタチオ',
-      'hazelnuts': 'ヘーゼルナッツ',
-      'brazil nuts': 'ブラジルナッツ',
-      'macadamia nuts': 'マカダミアナッツ',
-      'pine nuts': '松の実',
-      'peanuts': 'ピーナッツ',
-      'sunflower seeds': 'ひまわりの種',
-      'pumpkin seeds': 'かぼちゃの種',
-      'chia seeds': 'チアシード',
-      'flax seeds': '亜麻仁',
-      'sesame seeds': 'ごま',
-      
-      // 調味料・ソース（超完全版）
-      'soy sauce': '醤油',
-      'light soy sauce': '薄口醤油',
-      'dark soy sauce': '濃口醤油',
-      'tamari': 'たまり醤油',
-      'low sodium soy sauce': '減塩醤油',
-      
-      'miso paste': '味噌',
-      'white miso': '白味噌',
-      'red miso': '赤味噌',
-      'miso': '味噌',
-      
-      'rice vinegar': '米酢',
-      'white vinegar': '白酢',
-      'apple cider vinegar': 'りんご酢',
-      'balsamic vinegar': 'バルサミコ酢',
-      'red wine vinegar': '赤ワインビネガー',
-      'white wine vinegar': '白ワインビネガー',
-      'sherry vinegar': 'シェリービネガー',
-      'vinegar': '酢',
-      
-      'cooking wine': '料理酒',
-      'dry white wine': '辛口白ワイン',
-      'dry red wine': '辛口赤ワイン',
-      'white wine': '白ワイン',
-      'red wine': '赤ワイン',
-      'wine': 'ワイン',
-      
-      'sake': '日本酒',
-      'mirin': 'みりん',
-      'cooking sake': '料理酒',
-      
-      'honey': 'はちみつ',
-      'maple syrup': 'メープルシロップ',
-      'agave nectar': 'アガベシロップ',
-      'corn syrup': 'コーンシロップ',
-      'molasses': 'モラセス',
-      
-      'dijon mustard': 'ディジョンマスタード',
-      'whole grain mustard': '粒マスタード',
-      'yellow mustard': 'イエローマスタード',
-      'dry mustard': 'マスタードパウダー',
-      'mustard': 'マスタード',
-      
-      'ketchup': 'ケチャップ',
-      'tomato ketchup': 'トマトケチャップ',
-      'mayonnaise': 'マヨネーズ',
-      'miracle whip': 'ミラクルホイップ',
-      
-      'worcestershire sauce': 'ウスターソース',
-      'hot sauce': 'ホットソース',
-      'tabasco': 'タバスコ',
-      'sriracha': 'シラチャーソース',
-      'fish sauce': '魚醤',
-      'oyster sauce': 'オイスターソース',
-      'hoisin sauce': '海鮮醤',
-      'teriyaki sauce': '照り焼きソース',
-      'bbq sauce': 'バーベキューソース',
-      'steak sauce': 'ステーキソース',
-      
-      'pesto': 'ペスト',
-      'basil pesto': 'バジルペスト',
-      'sun-dried tomato pesto': 'ドライトマトペスト',
-      
-      'tahini': 'タヒニ',
-      'sesame paste': 'ごまペースト',
-      'peanut butter': 'ピーナッツバター',
-      'almond butter': 'アーモンドバター',
-      'cashew butter': 'カシューバター',
-      
-      // 単位・計量（完全版）
-      'teaspoon': '小さじ',
-      'teaspoons': '小さじ',
-      'tsp': '小さじ',
-      'tablespoon': '大さじ',
-      'tablespoons': '大さじ',
-      'tbsp': '大さじ',
-      'cup': 'カップ',
-      'cups': 'カップ',
-      'pint': 'パイント',
-      'pints': 'パイント',
-      'quart': 'クォート',
-      'quarts': 'クォート',
-      'gallon': 'ガロン',
-      'gallons': 'ガロン',
-      'fluid ounce': 'fl oz',
-      'fluid ounces': 'fl oz',
-      'fl oz': 'fl oz',
-      'ounce': 'オンス',
-      'ounces': 'オンス',
-      'oz': 'オンス',
-      'pound': 'ポンド',
-      'pounds': 'ポンド',
-      'lb': 'ポンド',
-      'lbs': 'ポンド',
-      'gram': 'g',
-      'grams': 'g',
-      'g': 'g',
-      'kilogram': 'kg',
-      'kilograms': 'kg',
-      'kg': 'kg',
-      'liter': 'リットル',
-      'liters': 'リットル',
-      'l': 'L',
-      'milliliter': 'ml',
-      'milliliters': 'ml',
-      'ml': 'ml',
-      
-      // 個数・数量
-      'piece': '個',
-      'pieces': '個',
-      'slice': '枚',
-      'slices': '枚',
-      'clove': '片',
-      'cloves': '片',
-      'bunch': '束',
-      'bunches': '束',
-      'head': '個',
-      'heads': '個',
-      'bulb': '玉',
-      'bulbs': '玉',
-      'stalk': '本',
-      'stalks': '本',
-      'sprig': '枝',
-      'sprigs': '枝',
-      'leaf': '枚',
-      'leaves': '枚',
-      'can': '缶',
-      'cans': '缶',
-      'jar': '瓶',
-      'jars': '瓶',
-      'bottle': '本',
-      'bottles': '本',
-      'package': 'パック',
-      'packages': 'パック',
-      'bag': '袋',
-      'bags': '袋',
-      'box': '箱',
-      'boxes': '箱',
-      'container': '容器',
-      'containers': '容器',
-      
-      // 調理用語（完全版）
-      'bring to a boil': '沸騰させる',
-      'bring to boil': '沸騰させる',
-      'bring to the boil': '沸騰させる',
-      'bring': '沸騰させる',
-      'wash': '洗う',
-      'wash the': '〜を洗う',
-      'cut into': '〜に切る',
-      'cut': '切る',
-      'chop': '刻む',
-      'dice': 'さいの目切りにする',
-      'slice': 'スライスする',
-      'mince': 'みじん切りにする',
-      'grate': 'すりおろす',
-      'peel': '皮をむく',
-      'trim': '取り除く',
-      'core': '芯を取る',
-      'meanwhile': 'その間に',
-      'sprinkle': '振りかける',
-      'sprinkle with': '〜を振りかける',
-      'toss': '和える',
-      'toss with': '〜で和える',
-      'drain': '水を切る',
-      'strain': 'こす',
-      'allow the flavours to mingle': '味をなじませる',
-      'allow flavours to mingle': '味をなじませる',
-      'let flavours mingle': '味をなじませる',
-      'season': '味付けする',
-      'season with': '〜で味付けする',
-      'taste and adjust': '味見して調整する',
-      'mix': '混ぜる',
-      'stir': 'かき混ぜる',
-      'whisk': '泡立てる',
-      'beat': '混ぜる',
-      'fold': 'さっくり混ぜる',
-      'combine': '合わせる',
-      'add': '加える',
-      'pour': '注ぐ',
-      'heat': '加熱する',
-      'warm': '温める',
-      'cool': '冷ます',
-      'chill': '冷やす',
-      'freeze': '冷凍する',
-      'thaw': '解凍する',
-      'melt': '溶かす',
-      'boil': '茹でる',
-      'simmer': '弱火で煮る',
-      'steam': '蒸す',
-      'fry': '揚げる',
-      'sauté': 'ソテーする',
-      'bake': 'オーブンで焼く',
-      'roast': 'ローストする',
-      'grill': 'グリルする',
-      'broil': '直火で焼く',
-      'toast': 'トーストする',
-      'brown': 'こんがり焼く',
-      'sear': '表面を焼く',
-      'caramelize': 'カラメル化する',
-      'reduce': '煮詰める',
-      'thicken': 'とろみをつける',
-      'marinate': 'マリネする',
-      'serve': '盛り付ける',
-      'garnish': '飾る',
-      'remove': '取り除く',
-      'discard': '捨てる',
-      'reserve': '取っておく',
-      'set aside': '取り置く',
-      'transfer': '移す',
-      'arrange': '並べる',
-      'cover': '蓋をする',
-      'uncover': '蓋を取る',
-      'wrap': '包む',
-      'unwrap': '包みを取る',
-      'store': '保存する',
-      'refrigerate': '冷蔵する',
-      'rest': '休ませる',
-      'stand': '置いておく',
-      'let stand': 'そのまま置く',
-      'cool completely': '完全に冷ます',
-      'at room temperature': '室温で',
-      'until tender': '柔らかくなるまで',
-      'until golden': 'きつね色になるまで',
-      'until done': '火が通るまで',
-      'until fragrant': '香りが立つまで',
-      'until smooth': 'なめらかになるまで',
-      'until combined': '混ざるまで',
-      'until thick': 'とろみがつくまで',
-      'for': '〜間',
-      'about': '約',
-      'approximately': '約',
-      'or until': '〜するまで',
-      'minutes': '分',
-      'minute': '分',
-      'hours': '時間',
-      'hour': '時間',
-      'seconds': '秒',
-      'second': '秒'
-    };
-    
-    // カタカナ変換用の簡易辞書
-    const katakanaFallback = {
-      'a': 'ア', 'i': 'イ', 'u': 'ウ', 'e': 'エ', 'o': 'オ',
-      'ka': 'カ', 'ki': 'キ', 'ku': 'ク', 'ke': 'ケ', 'ko': 'コ',
-      'sa': 'サ', 'si': 'シ', 'su': 'ス', 'se': 'セ', 'so': 'ソ',
-      'ta': 'タ', 'ti': 'チ', 'tu': 'ツ', 'te': 'テ', 'to': 'ト',
-      'na': 'ナ', 'ni': 'ニ', 'nu': 'ヌ', 'ne': 'ネ', 'no': 'ノ',
-      'ha': 'ハ', 'hi': 'ヒ', 'hu': 'フ', 'he': 'ヘ', 'ho': 'ホ',
-      'ma': 'マ', 'mi': 'ミ', 'mu': 'ム', 'me': 'メ', 'mo': 'モ',
-      'ya': 'ヤ', 'yu': 'ユ', 'yo': 'ヨ',
-      'ra': 'ラ', 'ri': 'リ', 'ru': 'ル', 're': 'レ', 'ro': 'ロ',
-      'wa': 'ワ', 'wo': 'ヲ', 'n': 'ン',
-      'ga': 'ガ', 'gi': 'ギ', 'gu': 'グ', 'ge': 'ゲ', 'go': 'ゴ',
-      'za': 'ザ', 'zi': 'ジ', 'zu': 'ズ', 'ze': 'ゼ', 'zo': 'ゾ',
-      'da': 'ダ', 'di': 'ディ', 'du': 'ヅ', 'de': 'デ', 'do': 'ド',
-      'ba': 'バ', 'bi': 'ビ', 'bu': 'ブ', 'be': 'ベ', 'bo': 'ボ',
-      'pa': 'パ', 'pi': 'ピ', 'pu': 'プ', 'pe': 'ペ', 'po': 'ポ'
-    };
-    
-    // 単語のカタカナ変換（フォールバック）
-    const toKatakana = (word) => {
-      // 基本的な英単語→カタカナ変換
-      const basicConversions = {
-        'pasta': 'パスタ',
-        'pizza': 'ピザ',
-        'sauce': 'ソース',
-        'cream': 'クリーム',
-        'butter': 'バター',
-        'sugar': 'シュガー',
-        'oil': 'オイル',
-        'wine': 'ワイン',
-        'beer': 'ビール',
-        'coffee': 'コーヒー',
-        'tea': 'ティー',
-        'cake': 'ケーキ',
-        'bread': 'ブレッド',
-        'rice': 'ライス',
-        'soup': 'スープ',
-        'salad': 'サラダ',
-        'meat': 'ミート',
-        'fish': 'フィッシュ',
-        'chicken': 'チキン',
-        'beef': 'ビーフ',
-        'pork': 'ポーク',
-        'cheese': 'チーズ',
-        'milk': 'ミルク',
-        'egg': 'エッグ',
-        'apple': 'アップル',
-        'orange': 'オレンジ',
-        'lemon': 'レモン',
-        'lime': 'ライム',
-        'banana': 'バナナ',
-        'grape': 'グレープ',
-        'tomato': 'トマト',
-        'potato': 'ポテト',
-        'onion': 'オニオン',
-        'garlic': 'ガーリック',
-        'pepper': 'ペッパー',
-        'salt': 'ソルト',
-        'water': 'ウォーター',
-        'ice': 'アイス',
-        'hot': 'ホット',
-        'cold': 'コールド',
-        'fresh': 'フレッシュ',
-        'dry': 'ドライ',
-        'wet': 'ウェット',
-        'sweet': 'スウィート',
-        'sour': 'サワー',
-        'spicy': 'スパイシー',
-        'mild': 'マイルド',
-        'strong': 'ストロング',
-        'light': 'ライト',
-        'heavy': 'ヘビー',
-        'thick': 'シック',
-        'thin': 'シン',
-        'large': 'ラージ',
-        'small': 'スモール',
-        'medium': 'ミディアム',
-        'extra': 'エクストラ',
-        'super': 'スーパー',
-        'special': 'スペシャル',
-        'premium': 'プレミアム',
-        'classic': 'クラシック',
-        'traditional': 'トラディショナル',
-        'modern': 'モダン',
-        'style': 'スタイル',
-        'type': 'タイプ',
-        'kind': 'カインド',
-        'mix': 'ミックス',
-        'blend': 'ブレンド',
-        'pure': 'ピュア',
-        'natural': 'ナチュラル',
-        'organic': 'オーガニック'
-      };
-      
-      const lowerWord = word.toLowerCase();
-      if (basicConversions[lowerWord]) {
-        return basicConversions[lowerWord];
-      }
-      
-      // 簡易的な音韻変換（完璧ではないが、フォールバック用）
-      let katakana = '';
-      for (let i = 0; i < word.length; i++) {
-        const char = word[i].toLowerCase();
-        if (katakanaFallback[char]) {
-          katakana += katakanaFallback[char];
-        } else if (char === 'l') {
-          katakana += 'ル';
-        } else if (char === 'r') {
-          katakana += 'ル';
-        } else if (char === 'v') {
-          katakana += 'ブ';
-        } else if (char === 'f') {
-          katakana += 'フ';
-        } else if (char === 'th') {
-          katakana += 'ス';
-        } else {
-          katakana += char.toUpperCase();
-        }
-      }
-      return katakana;
-    };
-    
-    // 翻訳漏れチェック関数
-    const checkUntranslated = (text) => {
-      if (!DEBUG_MODE) return [];
-      
-      const words = text.split(/\s+/);
-      const untranslated = [];
-      
-      words.forEach(word => {
-        const cleanWord = word.replace(/[^\w\s]/g, '').toLowerCase();
-        if (cleanWord && /^[a-zA-Z]+$/.test(cleanWord) && cleanWord.length > 2) {
-          if (!comprehensiveDict[cleanWord] && !comprehensiveDict[cleanWord + 's'] && !comprehensiveDict[cleanWord.slice(0, -1)]) {
-            untranslated.push(cleanWord);
-          }
-        }
-      });
-      
-      return [...new Set(untranslated)]; // 重複除去
-    };
-    
-    // メイン翻訳関数
-    const translate = (text, type = 'general') => {
-      if (!text || typeof text !== 'string') return text;
-      
-      if (DEBUG_MODE) {
-        console.log(`🔍 [翻訳前 ${type}]:`, text);
-      }
-      
-      let translated = text;
-      
-      // 1. 長いフレーズから順に翻訳（重要：順序が大事）
-      const sortedEntries = Object.entries(comprehensiveDict)
-        .sort(([a], [b]) => b.length - a.length);
-      
-      sortedEntries.forEach(([english, japanese]) => {
-        const regex = new RegExp(`\\b${english.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-        if (regex.test(translated)) {
-          translated = translated.replace(regex, japanese);
-        }
-      });
-      
-      // 2. 数字と単位のスペース統一
-      translated = translated.replace(/(\\d+)\\s+(g|kg|ml|L|個|枚|片|束|本|缶|瓶|パック|袋|箱|カップ|大さじ|小さじ|ポンド|オンス)/g, '$1$2');
-      
-      // 3. 翻訳漏れをチェック
-      const untranslated = checkUntranslated(translated);
-      if (untranslated.length > 0 && DEBUG_MODE) {
-        console.warn(`⚠️ 翻訳漏れ detected:`, untranslated);
-        
-        // フォールバック：未翻訳の単語をカタカナに変換
-        untranslated.forEach(word => {
-          const katakana = toKatakana(word);
-          const regex = new RegExp(`\\\\b${word}\\\\b`, 'gi');
-          translated = translated.replace(regex, katakana);
-        });
-      }
-      
-      if (DEBUG_MODE) {
-        console.log(`✅ [翻訳後 ${type}]:`, translated);
-        if (untranslated.length > 0) {
-          console.log(`🔄 [フォールバック適用]:`, translated);
-        }
-      }
-      
-      return translated;
-    };
-    
-    return {
-      translate,
-      checkUntranslated,
-      DEBUG_MODE
-    };
-  };
-  
-  // 翻訳システムのインスタンス作成
-  const translationSystem = createTranslationSystem();
-  
-  const translateIngredient = (ingredient) => {
-    return translationSystem.translate(ingredient, 'ingredient');
-  };
-  
-  const translateMeasure = (measure) => {
-    return translationSystem.translate(measure, 'measure');
-  };
-  
-  const translateMealName = (name) => {
-    return translationSystem.translate(name, 'meal');
-  };
-  
-  const translateInstructions = (instructions) => {
-    if (!instructions) return instructions;
-    
-    // 文字列の場合
-    if (typeof instructions === 'string') {
-      return translationSystem.translate(instructions, 'instructions');
-    }
-    
-    // 配列の場合
-    if (Array.isArray(instructions)) {
-      return instructions.map((step, index) => {
-        const translatedStep = translationSystem.translate(step, 'instructions');
-        
-        // ステップ番号を保持
-        if (/^\d+\./.test(translatedStep)) {
-          return translatedStep;
-        } else if (/^\d+/.test(step)) {
-          const num = step.match(/^(\d+)/)[1];
-          return translatedStep.replace(/^\d+/, `${num}.`);
-        }
-        
-        return translatedStep;
-      });
-    }
-    
-    return instructions;
-  };
-  
-  
   // Clean up intervals on unmount
   useEffect(() => {
     return () => {
       Object.values(timerIntervals).forEach(interval => clearInterval(interval));
     };
   }, [timerIntervals]);
-
 
   const getAdjustedIngredients = (recipe) => {
     const servings = selectedServings[recipe.id] || recipe.servings;

@@ -3511,7 +3511,7 @@ body {
 
 /* 賢い食材使い切りアコーディオン */
 .smart-ingredients-accordion {
-  margin: 20px 0;
+  margin: 20px 16px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   overflow: hidden;
