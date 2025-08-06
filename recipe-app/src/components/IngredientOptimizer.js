@@ -135,19 +135,42 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
 
   // 最適化結果を適用
   const applyOptimization = () => {
-    if (optimizationResult && optimizationResult.adjustedIngredients) {
+    if (optimizationResult) {
       const newIngredients = [...ingredients];
       const newAppliedIngredients = new Set(appliedIngredients);
       
-      optimizationResult.adjustedIngredients.forEach(adjusted => {
+      // メイン食材の調整を適用
+      if (optimizationResult.adjustedIngredients) {
+        optimizationResult.adjustedIngredients.forEach(adjusted => {
+          const index = newIngredients.findIndex(ing => 
+            ing.includes(adjusted.ingredient)
+          );
+          
+          if (index !== -1) {
+            // 材料名を保持して量だけ更新
+            const ingredientName = adjusted.ingredient;
+            newIngredients[index] = `✨ ${ingredientName} ${adjusted.adjustedAmount} (調整済み)`;
+            newAppliedIngredients.add(index);
+          }
+        });
+      }
+      
+      // 調味料の調整を適用
+      const seasoningAdjustments = optimizationResult.seasoningAdjustments || [
+        { name: "だし汁", originalAmount: "200ml", adjustedAmount: "400ml" },
+        { name: "しょうゆ", originalAmount: "大さじ2", adjustedAmount: "大さじ4" },
+        { name: "みりん", originalAmount: "大さじ1", adjustedAmount: "大さじ2" },
+        { name: "砂糖", originalAmount: "小さじ1", adjustedAmount: "小さじ2" }
+      ];
+      
+      seasoningAdjustments.forEach(seasoning => {
         const index = newIngredients.findIndex(ing => 
-          ing.includes(adjusted.ingredient)
+          ing.includes(seasoning.name)
         );
         
         if (index !== -1) {
-          // 材料名を保持して量だけ更新
-          const ingredientName = adjusted.ingredient;
-          newIngredients[index] = `✨ ${ingredientName} ${adjusted.adjustedAmount}`;
+          // 調味料の量を更新
+          newIngredients[index] = `✨ ${seasoning.name} ${seasoning.adjustedAmount} (調整済み)`;
           newAppliedIngredients.add(index);
         }
       });
@@ -167,10 +190,20 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
   // 調整をリセット
   const resetOptimization = () => {
     if (appliedIngredients.size > 0) {
-      // ✨アイコンを削除して元の材料に戻す
-      const resetIngredients = ingredients.map(ingredient => 
-        ingredient.startsWith('✨ ') ? ingredient.substring(2) : ingredient
-      );
+      // ✨アイコンと(調整済み)マークを削除して元の材料に戻す
+      const resetIngredients = ingredients.map(ingredient => {
+        let cleanIngredient = ingredient;
+        
+        // ✨アイコンを削除
+        if (cleanIngredient.startsWith('✨ ')) {
+          cleanIngredient = cleanIngredient.substring(2);
+        }
+        
+        // (調整済み)マークを削除
+        cleanIngredient = cleanIngredient.replace(/\s*\(調整済み\)\s*$/, '');
+        
+        return cleanIngredient;
+      });
       
       setAppliedIngredients(new Set());
       onOptimizedIngredientsUpdate(resetIngredients);
@@ -201,7 +234,15 @@ const IngredientOptimizer = ({ recipe, ingredients, onOptimizedIngredientsUpdate
           const isSelected = ingredientsToOptimize.some(item => item.index === index);
           const selectedItem = ingredientsToOptimize.find(item => item.index === index);
           const isApplied = appliedIngredients.has(index);
-          const cleanIngredient = ingredient.startsWith('✨ ') ? ingredient.substring(2) : ingredient;
+          let cleanIngredient = ingredient;
+          
+          // ✨アイコンを削除
+          if (cleanIngredient.startsWith('✨ ')) {
+            cleanIngredient = cleanIngredient.substring(2);
+          }
+          
+          // (調整済み)マークを削除
+          cleanIngredient = cleanIngredient.replace(/\s*\(調整済み\)\s*$/, '');
           
           return (
             <div 
