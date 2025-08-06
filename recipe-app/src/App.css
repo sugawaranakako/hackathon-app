@@ -98,8 +98,10 @@ body {
 
 .recipe-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .recipe-card {
@@ -3054,7 +3056,14 @@ body {
 /* レスポンシブデザイン - 小さい画面では1カラムに戻す */
 @media (max-width: 768px) {
   .recipe-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .recipe-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
 }

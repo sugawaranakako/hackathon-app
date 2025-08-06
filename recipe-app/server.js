@@ -397,6 +397,193 @@ ${userPreferences ? Object.entries(userPreferences).map(([key, value]) => `- ${k
   }
 });
 
+// レシピ翻訳API（Claude APIベース）
+app.post('/api/translate-recipe', async (req, res) => {
+  console.log('=== 🌍 translate-recipe API called ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const { title, ingredients, instructions } = req.body;
+    
+    // 入力検証
+    if (!title || !ingredients || !instructions) {
+      console.warn('Missing required fields:', { title: !!title, ingredients: !!ingredients, instructions: !!instructions });
+      // フォールバック: 元のデータを返す
+      return res.json({
+        success: true,
+        data: {
+          title: title || 'Unknown Recipe',
+          ingredients: ingredients || [],
+          instructions: instructions || []
+        },
+        fallback: true,
+        note: '入力データが不完全なため、元のデータを返しています。'
+      });
+    }
+
+    const systemPrompt = `あなたは料理レシピの翻訳者です。英語のレシピを自然な日本語に翻訳してください。
+
+翻訳ルール：
+1. 料理名は日本で親しまれている表記に翻訳する（例：Chicken Teriyaki → 鶏の照り焼き）
+2. 材料名は日本で使われる一般的な名称に翻訳する（例：Butter knob → バター 一片）
+3. 計量単位は日本の一般的な表記に変換する（例：1 cup → 200ml、1 tablespoon → 大さじ1）
+4. 作り方は自然で分かりやすい日本語に翻訳する
+5. 文脈を考慮した適切な翻訳をする（例：「Flour」がじゃがいもの文脈にある場合は無視）
+
+回答形式：
+料理名: [日本語の料理名]
+材料:
+- [材料名] [分量]
+作り方:
+1. [手順]
+2. [手順]
+
+JSON形式は使わず、上記の形式で回答してください。`;
+
+    const userMessage = `以下のレシピを日本語に翻訳してください：
+
+料理名: ${title || '不明'}
+
+材料:
+${ingredients && ingredients.length > 0 ? ingredients.map(i => `- ${i}`).join('\n') : '材料なし'}
+
+作り方:
+${instructions && instructions.length > 0 ? instructions.map((inst, idx) => `${idx + 1}. ${inst}`).join('\n') : '作り方なし'}
+
+以下の形式で日本語に翻訳してください：
+料理名: [日本語の料理名]
+材料:
+- [材料名] [分量]
+作り方:
+1. [手順]
+2. [手順]`;
+
+    const messages = [
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log('🤖 Calling Claude API for translation...');
+    const result = await callClaude(messages, systemPrompt);
+
+    console.log('📨 Claude translation result:', {
+      success: result.success,
+      hasContent: !!result.content,
+      contentLength: result.content?.length
+    });
+
+    if (result.success && result.content) {
+      console.log('Raw Claude response:', result.content);
+      
+      try {
+        // Claude APIの応答をパースして構造化
+        const content = result.content;
+        
+        // 料理名を抽出
+        const nameMatch = content.match(/料理名:\s*(.+)/);
+        const translatedTitle = nameMatch ? nameMatch[1].trim() : title;
+        
+        // 材料を抽出
+        const ingredientsMatch = content.match(/材料:\s*([\s\S]*?)(?=作り方:|$)/);
+        const translatedIngredients = [];
+        if (ingredientsMatch) {
+          const ingredientLines = ingredientsMatch[1].split('\n')
+            .filter(line => line.trim() && line.includes('-'))
+            .map(line => line.replace(/^-\s*/, '').trim());
+          translatedIngredients.push(...ingredientLines);
+        }
+        
+        // 作り方を抽出
+        const instructionsMatch = content.match(/作り方:\s*([\s\S]*?)$/);
+        const translatedInstructions = [];
+        if (instructionsMatch) {
+          const instructionLines = instructionsMatch[1].split('\n')
+            .filter(line => line.trim() && /^\d+\./.test(line.trim()))
+            .map(line => line.replace(/^\d+\.\s*/, '').trim());
+          translatedInstructions.push(...instructionLines);
+        }
+        
+        console.log('✅ Successfully parsed translation response');
+        
+        res.json({
+          success: true,
+          data: {
+            title: translatedTitle,
+            ingredients: translatedIngredients.length > 0 ? translatedIngredients : ingredients,
+            instructions: translatedInstructions.length > 0 ? translatedInstructions : instructions
+          },
+          translatedWithClaude: true,
+          rawResponse: content
+        });
+      } catch (parseError) {
+        console.warn('⚠️ Translation parsing failed:', parseError.message);
+        
+        // フォールバック: 原文をそのまま返す
+        res.json({
+          success: true,
+          data: {
+            title: title,
+            ingredients: ingredients || [],
+            instructions: instructions || []
+          },
+          fallback: true,
+          note: '翻訳のパースに失敗したため、元のデータを返しています。',
+          rawResponse: result.content
+        });
+      }
+    } else {
+      console.error('❌ Claude translation API failed:', result.error);
+      
+      // シンプルなモック翻訳を提供
+      const mockTranslatedIngredients = ingredients.map(ingredient => {
+        return ingredient
+          .replace(/butter knob/gi, 'バター 一片')
+          .replace(/knob of butter/gi, 'バター 一片')
+          .replace(/chicken breast/gi, '鶏むね肉')
+          .replace(/heavy cream/gi, '生クリーム')
+          .replace(/tablespoon/gi, '大さじ')
+          .replace(/teaspoon/gi, '小さじ')
+          .replace(/cup/gi, 'カップ')
+          .replace(/lb/gi, 'ポンド')
+          .replace(/oz/gi, 'オンス');
+      });
+      
+      const mockTranslatedInstructions = instructions.map(instruction => {
+        return instruction
+          .replace(/heat/gi, '熱する')
+          .replace(/add/gi, '加える')
+          .replace(/cook/gi, '調理する')
+          .replace(/simmer/gi, '煮込む')
+          .replace(/pour/gi, '注ぐ')
+          .replace(/until done/gi, '火が通るまで')
+          .replace(/in a pan/gi, 'フライパンで');
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          title: title.replace(/butter chicken/gi, 'バターチキン'),
+          ingredients: mockTranslatedIngredients,
+          instructions: mockTranslatedInstructions
+        },
+        translatedWithClaude: false,
+        note: 'Claude APIが利用できないため、簡易翻訳を使用しています。'
+      });
+    }
+  } catch (error) {
+    console.error('=== ❌ translate-recipe API Error Details ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'サーバーエラーが発生しました',
+      details: error.toString(),
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // ヘルスチェック
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -456,6 +643,7 @@ app.listen(PORT, () => {
   console.log(`   - POST /api/optimize-ingredients`);
   console.log(`   - POST /api/cooking-chat`);
   console.log(`   - POST /api/suggest-improvements`);
+  console.log(`   - POST /api/translate-recipe`);
   console.log(`🔑 Authentication status:`);
   console.log(`   - Project: ${projectId}`);
   console.log(`   - Location: ${location}`);
